@@ -1,92 +1,102 @@
 # Observatory
 
-A small production fleet dashboard: Go standard library backend, embedded HTML/CSS,
+A clean production fleet dashboard: Go standard library backend, embedded HTML/CSS,
 and vanilla JavaScript. No npm packages, Go dependencies, database, external fonts,
 or CDN assets. Entra authentication uses the platform's existing OIDC proxy.
 
-## Local development
+Extracted from [p07](https://github.com/mucsi96/p07) with its application history.
+Provisioning lives in [k8s-modules](https://github.com/mucsi96/k8s-modules), module
+`setup_app_dashboard`; p07 supplies the application inventory and platform inputs.
 
-From `p07`, enter `nix develop`, then:
+## Development
+
+Requires Go 1.24+ (CI uses 1.26). Node is needed only for the JS syntax check.
 
 ```bash
-cd apps/dashboard
 CONFIG_FILE=config.example.json go run .
-```
-
-Open http://localhost:8080. Set `GITHUB_TOKEN` in the process environment to read
-real repository data. Without in-cluster credentials, Kubernetes signals are
-explicitly **unknown**. The example contains placeholder app URLs, not demo data.
-The server binds to loopback by default; the container sets `LISTEN_ADDR=:8080`.
-
-```bash
 go test -race ./...
 go vet ./...
 node --check web/app.js
+bash -n scripts/deploy.sh
 ```
+
+Open http://localhost:8080. Set `GITHUB_TOKEN` to read real repository data. Without
+in-cluster credentials Kubernetes signals are explicitly **unknown**. The example
+contains placeholder URLs, not demo data. The local server binds to loopback;
+the container uses `LISTEN_ADDR=:8080` and runs as a non-root static binary.
 
 ## Signals
 
-- **Health:** all Deployments in each provisioned app namespace, using observed
-  generation, updated/available/desired replica counts and failure conditions.
-  This includes the frontend and backend. A scaled-down deployment is degraded;
-  an empty namespace is not deployed; an API failure is unknown. Health means
-  Kubernetes readiness, not an independent external synthetic uptime probe.
-- **Production version:** actual Deployment container image tags/digests, including
-  separate frontend/backend versions. Expand the row for full image references.
+- **Health:** all Deployments in each app namespace, using observed generation,
+  updated/available/desired replicas, and failure conditions. Scaled-down workloads
+  are degraded, empty namespaces are not deployed, API failures are unknown.
+  Health means Kubernetes readiness, not an external synthetic uptime probe.
+- **Production version:** Deployment container image tags/digests, with separate
+  frontend/backend images. Expand a row for full image references.
 - **Last deployment:** the most recent `deploy` job found in the latest 20 main
   branch workflow runs, restricted to `pipeline.yml` to exclude Pages deployments.
-  An app descriptor can override `deploymentWorkflow`. If the recent window has
-  no matching job, the UI says no recent deploy data rather than guessing.
+  App descriptors can override `deploymentWorkflow`. An absent job is shown as
+  no recent deploy data. This repository uses the same `pipeline.yml` convention.
 - **MRs / PRs:** all open GitHub PRs (paginated), including drafts. Checks and legacy
-  commit statuses are combined for each current head SHA. Failures take precedence
+  commit statuses are combined for the current head SHA. Failures take precedence
   over running checks; no checks is distinct from passed; API errors are unknown.
 - **Issues:** open GitHub issues excluding PRs. Incomplete searches are rejected.
 
-The backend collects at most four apps concurrently, with request timeouts and a
+The backend collects up to four apps concurrently, with request timeouts and a
 50-second collection deadline, then waits 60 seconds before collecting again.
-Browsers read the shared cached snapshot every 15 seconds; Refresh reads that
-snapshot without triggering additional upstream calls. Snapshots older than three
-minutes are marked stale. Each app's Kubernetes and GitHub errors are independent.
-Credentials and upstream response bodies are never included in API errors.
+Browsers read the shared snapshot every 15 seconds; Refresh does not trigger new
+upstream calls. Snapshots older than three minutes are stale. Kubernetes and GitHub
+errors are independent per app. Credentials are never returned to the browser.
 
 `GET /healthz` checks the server; `GET /api/apps` returns the latest snapshot (503
-until initial collection completes). App data and UI are protected by OIDC in
-production. The backend does not implement standalone user authentication.
+until initial collection completes). Production access is protected by the OIDC
+proxy and an ingress NetworkPolicy. The app has no standalone authentication.
 
-## Build and deploy
+## Independent build and deployment
 
-The `Observatory` GitHub Actions workflow tests PRs and publishes a scratch-based,
-non-root image on main to:
+`Pipeline` tests PRs. Main pushes and manual runs publish:
 
 ```text
-ghcr.io/mucsi96/p07-observatory:sha-<full commit SHA>
+ghcr.io/mucsi96/observatory-app:sha-<full commit SHA>
 ```
 
-Make the GHCR package public after first publication so Kubernetes can pull it.
-The image has CA certificates, one static binary, and its embedded frontend.
+Make the GHCR package public after its first publication so Kubernetes can pull it.
+Once the provisioning module sets repository variable `DEPLOY_ENABLED=true`,
+the pipeline also deploys the exact image it built, using Azure OIDC, kubelogin,
+and the existing Twingate service account. Before provisioning, the deploy job is
+skipped so the first image can be published independently.
 
-In the p07 root, set `TF_VAR_dashboard_image` to that published image before
-running the normal Terraform initialization and plan/apply process. Terraform owns
-the dashboard deployment, config, credentials, read-only per-app RBAC, OIDC proxy,
-HTTPRoute, and an ingress NetworkPolicy that admits only the OIDC proxy.
-The existing GitHub token is sourced from Key Vault and supplied only to the Go
-process. It needs repository metadata, Issues, Pull requests, Checks, Commit
-statuses, and Actions read access for the observed repositories.
+Terraform supplies repository secrets `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`,
+`AZURE_SUBSCRIPTION_ID`, `AZURE_KEYVAULT_NAME`, and `TWINGATE_SERVICE_KEY`.
+The deploy identity reads only the platform vault's `k8s-oidc-config` secret and
+can manage application Deployments/Services in the `observatory` namespace.
+Runtime GitHub credentials stay in the platform-managed Kubernetes Secret.
 
-The URL is `https://apps.<dns-zone>`; the sign-in allowlist uses the same email as
-Grafana. Existing wildcard DNS and the shared TLS Gateway cover this hostname.
+Manual deployment after Azure login and Twingate authentication:
 
-The seven provisioned application modules and Observatory itself form the fleet.
-Platform components (Grafana, databases, log collectors, and the bank email
-forwarding worker) remain in the existing platform monitoring stack.
+```bash
+AZURE_KEYVAULT_NAME=p07 \
+DASHBOARD_IMAGE=ghcr.io/mucsi96/observatory-app:sha-<full-commit> \
+bash scripts/deploy.sh
+```
 
-## Module development
+The script applies `deploy/service.yaml` and `deploy/deployment.yaml`, preserving
+the existing names, namespace, selector, and port. It restarts the workload to
+reload configuration/credentials and waits for readiness. After platform inventory
+or token changes, rerun the pipeline or `kubectl -n observatory rollout restart
+deployment/observatory` to reload them.
 
-`dashboard.tf` and the seven app module calls pin the immutable module commit from
-[k8s-modules PR #136](https://github.com/mucsi96/k8s-modules/pull/136), so a sibling
-checkout is not required. Run `terraform init` to refresh module sources. Merge
-the module PR first; when its release is published, align the environment's
-module pins to the release containing `dashboard_app` and `setup_app_dashboard`.
+## Handoff from p07
 
-Adding an app means including its `dashboard_app` output in `dashboard.tf`'s
-`apps` list; the dashboard config and namespace-scoped reader RBAC follow it.
+1. Publish this repository's first image and make its package public.
+2. Apply the updated `setup_app_dashboard` module in p07 (Terraform 1.7+). Its
+   `removed` blocks forget the old Terraform Deployment and Service **without
+   deleting either**, and provision this repository's deploy identity and secrets.
+3. Run `Pipeline` manually on main. The app adopts the existing resources with
+   `kubectl apply` and rolls out the standalone image. The URL stays
+   **https://apps.ibari.ch**; OIDC, routing and runtime access rules retain their
+   existing Terraform addresses.
+
+The running image from p07 remains active until this handoff is applied and the
+first standalone deployment succeeds. On fresh environments, provision the module
+first, then run this pipeline to install the workload.

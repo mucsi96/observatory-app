@@ -1,0 +1,5 @@
+/observatory
+/config.json
+/.kube/
+/.env
+/.env.*

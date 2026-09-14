@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: observatory
+  namespace: observatory
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: observatory
+  template:
+    metadata:
+      labels:
+        app: observatory
+    spec:
+      serviceAccountName: observatory
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: observatory
+          # scripts/deploy.sh substitutes the exact image produced by this run.
+          image: ghcr.io/mucsi96/observatory-app:deployment-required
+          ports:
+            - containerPort: 8080
+          env:
+            - name: CONFIG_FILE
+              value: /config/config.json
+            - name: GITHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: observatory-github
+                  key: token
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+          resources:
+            requests:
+              cpu: 5m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+      volumes:
+        - name: config
+          configMap:
+            name: observatory

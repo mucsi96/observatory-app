@@ -1,0 +1,6 @@
+.git
+.github
+.kube
+.env*
+config.json
+observatory
