@@ -36,7 +36,9 @@ func (d *Dashboard) repository(ctx context.Context, repo, workflow string) (*Rep
 			TotalCount int  `json:"total_count"`
 			Incomplete bool `json:"incomplete_results"`
 		}
-		err := getJSON(ctx, d.github, d.githubURL+"/search/issues?q="+url.QueryEscape("repo:"+repo+" is:open is:"+kind)+"&per_page=1", d.githubToken, &data)
+		// Renovate's Dependency Dashboard is bookkeeping, not an actionable issue.
+		query := "repo:" + repo + " is:open is:" + kind + ` NOT "Dependency Dashboard" in:title`
+		err := getJSON(ctx, d.github, d.githubURL+"/search/issues?q="+url.QueryEscape(query)+"&per_page=1", d.githubToken, &data)
 		if data.Incomplete {
 			return 0, fmt.Errorf("GitHub search results incomplete")
 		}

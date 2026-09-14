@@ -112,6 +112,9 @@ func TestRepositorySeparatesIssuesAndFindsApplicationDeploy(t *testing.T) {
 			if !strings.Contains(r.URL.Query().Get("q"), "is:issue") {
 				t.Error("must exclude PRs from issue count")
 			}
+			if !strings.Contains(r.URL.Query().Get("q"), `NOT "Dependency Dashboard" in:title`) {
+				t.Error("must exclude Dependency Dashboard issues by title")
+			}
 			w.Write([]byte(`{"total_count":7}`))
 		case "/repos/owner/repo/pulls":
 			w.Write([]byte(`[{"number":12,"title":"A change","html_url":"https://github.com/owner/repo/pull/12","head":{"sha":"abc"}}]`))
