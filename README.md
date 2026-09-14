@@ -94,7 +94,7 @@ deployment/observatory` to reload them.
    deleting either**, and provision this repository's deploy identity and secrets.
 3. Run `Pipeline` manually on main. The app adopts the existing resources with
    `kubectl apply` and rolls out the standalone image. The URL stays
-   **https://apps.ibari.ch**; OIDC, routing and runtime access rules retain their
+   **https://apps.<dns-zone>**; OIDC, routing and runtime access rules retain their
    existing Terraform addresses.
 
 The running image from p07 remains active until this handoff is applied and the
