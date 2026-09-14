@@ -1,0 +1,7 @@
+{
+  "environment": "p07",
+  "apps": [
+    {"name": "Hello", "namespace": "hello", "repository": "mucsi96/skeleton-app", "url": "https://hello.example.com"},
+    {"name": "Learn Language", "namespace": "learn-language", "repository": "mucsi96/learn-language", "url": "https://language.example.com"}
+  ]
+}

@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f6f8">
+  <title>Observatory · P07</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar"><a class="brand" href="/" aria-label="Observatory home"><span class="brand-mark">◈</span> observatory<span class="brand-divider">/</span><span id="environment">p07</span></a><span class="environment"><span class="dot"></span> Production</span></header>
+  <main>
+    <section class="intro"><div><p class="eyebrow">YOUR APPLICATIONS, AT A GLANCE</p><h1>A little clarity.<br>Across your entire fleet.</h1><p class="subtitle">Health, releases, and work in motion. One quiet place to keep an eye on it all.</p></div><div class="sync"><span id="updated" role="status">Connecting to your fleet…</span><button id="refresh" type="button">↻ <span>Refresh</span></button></div></section>
+    <div id="notice" class="notice" role="status" hidden></div>
+    <section class="metrics" aria-label="Fleet overview"><article><span class="metric-label">Applications</span><strong id="total">—</strong><span>in your production fleet</span></article><article><span class="metric-label">Healthy</span><strong id="healthy">—</strong><span id="health-caption">waiting for a signal</span></article><article><span class="metric-label">Open MRs <small>/ PRs</small></span><strong id="mrs">—</strong><span>changes on the horizon</span></article><article><span class="metric-label">Open issues</span><strong id="issues">—</strong><span>ideas and fixes to explore</span></article></section>
+    <section class="fleet" aria-labelledby="fleet-title"><div class="toolbar"><div><h2 id="fleet-title">Application fleet <span id="visible-count"></span></h2><p>Live signals. Real production versions.</p></div><div class="controls"><label class="search"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Find an application…" aria-label="Find an application"></label><label class="sr-only" for="filter">Filter applications</label><select id="filter"><option value="all">All applications</option><option value="attention">Needs attention</option><option value="healthy">Healthy</option></select></div></div>
+    <div class="table-wrap"><table><thead><tr><th scope="col">Application</th><th scope="col">Health</th><th scope="col">Production version</th><th scope="col">Last deployment</th><th scope="col">MRs / PRs</th><th scope="col">Issues</th></tr></thead><tbody id="apps"><tr><td colspan="6" class="empty"><span class="loading-dot"></span> Gathering signals from your applications…</td></tr></tbody></table></div>
+    <p class="table-note">Health reflects Kubernetes readiness · Versions are deployed container images · Expand an app for workload and MR details</p></section>
+    <footer><span><span class="brand-mark">◈</span> Built for a clearer view.</span><span>Go + vanilla JavaScript · Polls every minute</span></footer>
+  </main>
+</body>
+</html>
