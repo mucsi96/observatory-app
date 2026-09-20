@@ -1,5 +1,11 @@
 {
   "environment": "p07",
+  "auth": {
+    "tenantId": "00000000-0000-0000-0000-000000000001",
+    "clientId": "00000000-0000-0000-0000-000000000002",
+    "apiClientId": "00000000-0000-0000-0000-000000000003",
+    "clientLogUrl": ""
+  },
   "apps": [
     {"name": "Hello", "namespace": "hello", "repository": "mucsi96/skeleton-app", "url": "https://hello.example.com"},
     {"name": "Learn Language", "namespace": "learn-language", "repository": "mucsi96/learn-language", "url": "https://language.example.com"}

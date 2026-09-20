@@ -1,0 +1,33 @@
+{
+  "name": "observatory-client",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "start": "ng serve --port 4270",
+    "build": "ng build",
+    "watch": "ng build --watch --configuration development"
+  },
+  "dependencies": {
+    "@angular/animations": "22.0.7",
+    "@angular/cdk": "22.0.5",
+    "@angular/common": "22.0.7",
+    "@angular/compiler": "22.0.7",
+    "@angular/core": "22.0.7",
+    "@angular/forms": "22.0.7",
+    "@angular/material": "22.0.5",
+    "@angular/platform-browser": "22.0.7",
+    "@angular/router": "22.0.7",
+    "@grafana/faro-web-sdk": "^2.7.0",
+    "@mucsi96/angular-material-theme": "^1.12.0",
+    "oidc-client-ts": "^3.1.0",
+    "rxjs": "7.8.2",
+    "tslib": "2.8.1",
+    "zone.js": "0.16.2"
+  },
+  "devDependencies": {
+    "@angular/build": "22.0.7",
+    "@angular/cli": "22.0.7",
+    "@angular/compiler-cli": "22.0.7",
+    "typescript": "6.0.3"
+  }
+}

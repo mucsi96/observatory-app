@@ -1,0 +1,23 @@
+{
+  "environment": "test",
+  "apps": [
+    {
+      "name": "Hello",
+      "namespace": "hello",
+      "repository": "owner/hello",
+      "url": "https://hello.example.com"
+    },
+    {
+      "name": "Language",
+      "namespace": "language",
+      "repository": "owner/language",
+      "url": "https://language.example.com"
+    },
+    {
+      "name": "Offline",
+      "namespace": "offline",
+      "repository": "owner/offline",
+      "url": "https://offline.example.com"
+    }
+  ]
+}

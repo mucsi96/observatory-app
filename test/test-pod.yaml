@@ -1,0 +1,105 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: observatory-app-test
+spec:
+  containers:
+    - name: traefik
+      image: docker.io/library/traefik:v3.6
+      ports:
+        - { containerPort: 80, hostPort: 8170 }
+      volumeMounts:
+        - {
+            name: traefik-config,
+            mountPath: /etc/traefik/traefik.yaml,
+            readOnly: true,
+          }
+        - {
+            name: traefik-routes,
+            mountPath: /etc/traefik/routes.yaml,
+            readOnly: true,
+          }
+      livenessProbe:
+        exec: { command: [traefik, healthcheck, --ping] }
+    - name: db
+      image: docker.io/library/postgres:17.5-bullseye
+      ports:
+        - { containerPort: 5432, hostPort: 5471 }
+      env:
+        - { name: POSTGRES_DB, value: test }
+        - { name: POSTGRES_USER, value: postgres }
+        - { name: POSTGRES_PASSWORD, value: postgres }
+      livenessProbe:
+        exec: { command: [pg_isready, -U, postgres] }
+    - name: mock-upstream
+      image: localhost/observatory-app-mock-upstream:test
+      ports:
+        - { containerPort: 3070, hostPort: 3071 }
+      livenessProbe:
+        exec:
+          command:
+            [
+              node,
+              -e,
+              "fetch('http://localhost:3070/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+            ]
+    - name: mock-oauth2
+      image: docker.io/mucsi96/mock-oidc-provider:latest
+      ports:
+        - { containerPort: 8070, hostPort: 8070 }
+      env:
+        - { name: PORT, value: '8070' }
+        - { name: ISSUER_ID, value: default }
+        - { name: SUB, value: test-user }
+        - { name: OID, value: 00000000-0000-0000-0000-000000000001 }
+        - { name: NAME, value: Test User }
+        - { name: PREFERRED_USERNAME, value: test-user@example.com }
+        - { name: ROLES, value: readApps }
+        - { name: SCP, value: api-access }
+        - { name: AUD, value: mock-api-client-id }
+      livenessProbe:
+        httpGet: { path: /health, port: 8070 }
+    - name: server
+      image: localhost/observatory-app-server:test
+      ports:
+        - { containerPort: 8074, hostPort: 8074 }
+      env:
+        - { name: APP_ENV, value: test }
+        - { name: SERVER_PORT, value: '8074' }
+        - { name: MANAGEMENT_PORT, value: '8172' }
+        - { name: BASE_PATH, value: /api }
+        - { name: CONFIG_FILE, value: /config/config.json }
+        - { name: DB_HOST, value: localhost }
+        - { name: DB_PORT, value: '5432' }
+        - { name: DB_NAME, value: test }
+        - { name: DB_USERNAME, value: postgres }
+        - { name: DB_PASSWORD, value: postgres }
+        - { name: MOCK_OAUTH2_SERVER_URI, value: http://localhost:8070 }
+        - { name: GITHUB_API_URL, value: http://localhost:3070 }
+        - { name: GITHUB_TOKEN, value: mock-github-token }
+        - { name: KUBERNETES_API_URL, value: http://localhost:3070 }
+        - { name: KUBERNETES_TOKEN_FILE, value: /config/kubernetes-token }
+        - { name: KUBERNETES_CA_FILE, value: none }
+        - { name: POLL_INTERVAL, value: 1s }
+      volumeMounts:
+        - { name: app-config, mountPath: /config/config.json, readOnly: true }
+        - {
+            name: kubernetes-token,
+            mountPath: /config/kubernetes-token,
+            readOnly: true,
+          }
+      livenessProbe:
+        exec: { command: [/server, healthcheck] }
+    - name: client
+      image: localhost/observatory-app-client:test
+      livenessProbe:
+        httpGet: { path: /, port: 8000 }
+  volumes:
+    - name: traefik-config
+      hostPath: { path: test/traefik.yaml, type: File }
+    - name: traefik-routes
+      hostPath: { path: test/traefik-routes.yaml, type: File }
+    - name: app-config
+      hostPath: { path: test/config.json, type: File }
+    - name: kubernetes-token
+      hostPath: { path: test/kubernetes-token, type: File }

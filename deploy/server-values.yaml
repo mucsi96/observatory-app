@@ -1,0 +1,14 @@
+appPort: 8080
+managementPort: 8082
+basePath: /api
+serviceAccountName: observatory
+health:
+  livenessPath: /health/liveness
+  readinessPath: /health/readiness
+resources:
+  requests:
+    cpu: 5m
+    memory: 64Mi
+  limits:
+    cpu: null
+    memory: 128Mi
