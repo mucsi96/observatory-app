@@ -11,7 +11,7 @@ if [[ "${SKIP_BUILD:-}" != 1 ]]; then
 fi
 bash "$ROOT/scripts/pod_down.sh"
 podman kube play "$ROOT/test/test-pod.yaml"
-for container in observatory-app-test-traefik observatory-app-test-db observatory-app-test-mock-upstream observatory-app-test-mock-oauth2 observatory-app-test-server observatory-app-test-client; do
+for container in observatory-app-test-traefik observatory-app-test-mock-upstream observatory-app-test-mock-oauth2 observatory-app-test-server observatory-app-test-client; do
   ready=false
   for ((attempt=0; attempt<60; attempt++)); do
     if timeout 5s podman healthcheck run "$container" >/dev/null 2>&1; then ready=true; break; fi

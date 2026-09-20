@@ -17,7 +17,6 @@ import (
 	"github.com/mucsi96/observatory-app/internal/auth"
 	"github.com/mucsi96/observatory-app/internal/config"
 	"github.com/mucsi96/observatory-app/internal/dashboard"
-	"github.com/mucsi96/observatory-app/internal/database"
 	"github.com/mucsi96/observatory-app/internal/httpapi"
 )
 
@@ -52,17 +51,6 @@ func run() error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-	startup, cancel := context.WithTimeout(ctx, 60*time.Second)
-	db, err := database.Open(startup, c.Database)
-	cancel()
-	if err != nil {
-		return err
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	defer sqlDB.Close()
 	verifier := auth.NewVerifier(ctx, c.Auth)
 	client := &http.Client{Timeout: 12 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	var kube *http.Client
@@ -83,7 +71,7 @@ func run() error {
 		return fmt.Errorf("Kubernetes CA can only be disabled for tests")
 	}
 	collector := dashboard.NewCollector(dashboard.CollectorOptions{Environment: c.Environment, Apps: c.Apps, GitHubURL: c.GitHubURL, GitHubToken: c.GitHubToken, GitHubClient: client, KubernetesURL: c.KubernetesURL, KubernetesTokenFile: c.KubernetesTokenFile, KubernetesClient: kube})
-	repository := dashboard.NewRepository(db)
+	cache := &dashboard.Cache{}
 	collectorDone := make(chan struct{})
 	go func() {
 		defer close(collectorDone)
@@ -94,11 +82,7 @@ func run() error {
 			if ctx.Err() != nil {
 				return
 			}
-			save, cancel := context.WithTimeout(ctx, 5*time.Second)
-			if err := repository.Save(save, snapshot); err != nil {
-				slog.Error("persist snapshot failed")
-			}
-			cancel()
+			cache.Publish(snapshot)
 			select {
 			case <-ctx.Done():
 				return
@@ -107,8 +91,8 @@ func run() error {
 		}
 	}()
 	gin.SetMode(gin.ReleaseMode)
-	server := &http.Server{Addr: c.ListenAddress, Handler: httpapi.NewRouter(repository, c.Environment, c.Auth, verifier, c.BasePath), ReadHeaderTimeout: 5 * time.Second, WriteTimeout: 20 * time.Second, IdleTimeout: 60 * time.Second}
-	management := &http.Server{Addr: c.ManagementAddress, Handler: httpapi.NewManagementRouter(repository), ReadHeaderTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: 30 * time.Second}
+	server := &http.Server{Addr: c.ListenAddress, Handler: httpapi.NewRouter(cache, c.Auth, verifier, c.BasePath), ReadHeaderTimeout: 5 * time.Second, WriteTimeout: 20 * time.Second, IdleTimeout: 60 * time.Second}
+	management := &http.Server{Addr: c.ManagementAddress, Handler: httpapi.NewManagementRouter(cache), ReadHeaderTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: 30 * time.Second}
 	serverErrors := make(chan error, 2)
 	go func() { serverErrors <- server.ListenAndServe() }()
 	go func() { serverErrors <- management.ListenAndServe() }()

@@ -11,14 +11,12 @@ import (
 
 	"github.com/mucsi96/observatory-app/internal/auth"
 	"github.com/mucsi96/observatory-app/internal/dashboard"
-	"github.com/mucsi96/observatory-app/internal/database"
 )
 
 type Config struct {
 	Environment         string           `json:"environment"`
 	Apps                []dashboard.App  `json:"apps"`
 	Auth                auth.Environment `json:"auth"`
-	Database            database.Config  `json:"-"`
 	ListenAddress       string           `json:"-"`
 	ManagementAddress   string           `json:"-"`
 	BasePath            string           `json:"-"`
@@ -64,10 +62,6 @@ func Load() (Config, error) {
 			return c, fmt.Errorf("invalid app configuration: %q", app.Name)
 		}
 		seen[app.Namespace] = true
-	}
-	c.Database = database.Config{Host: os.Getenv("DB_HOST"), Port: env("DB_PORT", "5432"), Name: os.Getenv("DB_NAME"), Username: os.Getenv("DB_USERNAME"), Password: os.Getenv("DB_PASSWORD"), SSLMode: env("DB_SSLMODE", "disable")}
-	if c.Database.Host == "" || c.Database.Name == "" || c.Database.Username == "" || c.Database.Password == "" {
-		return c, fmt.Errorf("DB_HOST, DB_NAME, DB_USERNAME and DB_PASSWORD are required")
 	}
 	serverPort := env("SERVER_PORT", "8080")
 	managementPort := env("MANAGEMENT_PORT", "8082")

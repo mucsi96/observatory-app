@@ -21,16 +21,6 @@ spec:
           }
       livenessProbe:
         exec: { command: [traefik, healthcheck, --ping] }
-    - name: db
-      image: docker.io/library/postgres:17.5-bullseye
-      ports:
-        - { containerPort: 5432, hostPort: 5471 }
-      env:
-        - { name: POSTGRES_DB, value: test }
-        - { name: POSTGRES_USER, value: postgres }
-        - { name: POSTGRES_PASSWORD, value: postgres }
-      livenessProbe:
-        exec: { command: [pg_isready, -U, postgres] }
     - name: mock-upstream
       image: localhost/observatory-app-mock-upstream:test
       ports:
@@ -69,11 +59,6 @@ spec:
         - { name: MANAGEMENT_PORT, value: '8172' }
         - { name: BASE_PATH, value: /api }
         - { name: CONFIG_FILE, value: /config/config.json }
-        - { name: DB_HOST, value: localhost }
-        - { name: DB_PORT, value: '5432' }
-        - { name: DB_NAME, value: test }
-        - { name: DB_USERNAME, value: postgres }
-        - { name: DB_PASSWORD, value: postgres }
         - { name: MOCK_OAUTH2_SERVER_URI, value: http://localhost:8070 }
         - { name: GITHUB_API_URL, value: http://localhost:3070 }
         - { name: GITHUB_TOKEN, value: mock-github-token }

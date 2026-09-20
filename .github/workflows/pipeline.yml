@@ -42,11 +42,9 @@ jobs:
       - run: bash -n scripts/deploy.sh scripts/pod_up.sh scripts/pod_down.sh
       - name: Start real test stack
         run: bash scripts/pod_up.sh
-      - name: Go race and PostgreSQL integration tests
+      - name: Go race tests
         run: go test -race ./...
         working-directory: server
-        env:
-          TEST_DATABASE_HOST: localhost
       - run: npm test
         working-directory: test
       - name: Upload test artifacts

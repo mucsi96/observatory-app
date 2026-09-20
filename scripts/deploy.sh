@@ -25,17 +25,17 @@ kubectl config set-context --current --namespace=observatory >/dev/null
 # Secrets and hashes them into the Deployment to roll out configuration changes.
 # Keep all secret material in private temporary files, never command arguments.
 kubectl get configmap observatory -o json | jq -er '.data["config.json"]' > "$temporary/config.json"
-kubectl get secrets observatory-database observatory-github -o json > "$temporary/secrets.json"
-jq -en --slurpfile config "$temporary/config.json" --slurpfile secrets "$temporary/secrets.json" \
+kubectl get secret observatory-github -o json > "$temporary/secret.json"
+jq -en --slurpfile config "$temporary/config.json" --slurpfile secret "$temporary/secret.json" \
   --arg image "$SERVER_IMAGE" '{
     image: $image,
     host: ($config[0].apps[] | select(.namespace == "observatory") | .url | ltrimstr("https://")),
     clientId: $config[0].auth.apiClientId,
     configFile: [{name: "config.json", mountPath: "/config/config.json", data: ($config[0] | tojson | @base64)}],
-    env: (($secrets[0].items[] | select(.metadata.name == "observatory-database") | .data | with_entries(.value |= @base64d)) + {
+    env: {
       CONFIG_FILE: "/config/config.json",
-      GITHUB_TOKEN: ($secrets[0].items[] | select(.metadata.name == "observatory-github") | .data.token | @base64d)
-    })
+      GITHUB_TOKEN: ($secret[0].data.token | @base64d)
+    }
   }' > "$temporary/server-values.json"
 jq -en --slurpfile server "$temporary/server-values.json" --arg image "$CLIENT_IMAGE" \
   '{image: $image, host: $server[0].host}' > "$temporary/client-values.json"

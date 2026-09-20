@@ -1,26 +1,24 @@
 package httpapi
 
 import (
-	"context"
-	"errors"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/mucsi96/observatory-app/internal/auth"
 	"github.com/mucsi96/observatory-app/internal/dashboard"
 )
 
-type failingStore struct{}
+type guardedCache struct{}
 
-func (failingStore) Latest(context.Context, string) (dashboard.Snapshot, error) {
-	panic("unauthorized request reached persistence")
+func (guardedCache) Latest() (dashboard.Snapshot, bool) {
+	panic("unauthorized request reached the snapshot cache")
 }
-func (failingStore) Ready(context.Context) error { return errors.New("database unavailable") }
 
 func TestPublicConfigurationAndProtectedAPI(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	r := NewRouter(failingStore{}, "private-fleet", auth.Environment{TenantID: "tenant", ClientID: "spa", APIClientID: "api"}, nil, "/api")
+	r := NewRouter(guardedCache{}, auth.Environment{TenantID: "tenant", ClientID: "spa", APIClientID: "api"}, nil, "/api")
 	for _, tc := range []struct {
 		path string
 		code int
@@ -34,7 +32,8 @@ func TestPublicConfigurationAndProtectedAPI(t *testing.T) {
 }
 
 func TestManagementHealthIsSeparate(t *testing.T) {
-	r := NewManagementRouter(failingStore{})
+	cache := &dashboard.Cache{}
+	r := NewManagementRouter(cache)
 	for _, tc := range []struct {
 		path   string
 		status int
@@ -44,5 +43,12 @@ func TestManagementHealthIsSeparate(t *testing.T) {
 		if w.Code != tc.status {
 			t.Fatalf("%s: got %d want %d", tc.path, w.Code, tc.status)
 		}
+	}
+	// Upstream failures are dashboard signals, not an unhealthy API process.
+	cache.Publish(dashboard.Snapshot{UpdatedAt: time.Now(), Apps: []dashboard.Result{{Health: "unknown", Errors: []string{"upstream unavailable"}}}})
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest("GET", "/health/readiness", nil))
+	if w.Code != 200 {
+		t.Fatal("first snapshot must make the API ready, including partial results")
 	}
 }

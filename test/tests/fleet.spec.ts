@@ -1,5 +1,4 @@
 import { test, expect } from '../fixtures';
-import { query } from '../utils';
 
 test('shows real collected signals, versions, PR checks and partial failures', async ({
   page,
@@ -28,14 +27,12 @@ test('shows real collected signals, versions, PR checks and partial failures', a
   await page.getByRole('button', { name: 'Offline +', exact: true }).click();
   await expect(page.getByText('Kubernetes: upstream HTTP 503')).toBeVisible();
   await expect(page.getByText('GitHub: upstream HTTP 503')).toBeVisible();
-  const { rows } = await query(
-    'SELECT apps FROM observatory.snapshots WHERE environment=$1',
-    ['test']
-  );
-  expect(
-    rows[0].apps.find((app: { namespace: string }) => app.namespace === 'hello')
-      .repositoryData.issues
-  ).toBe(2);
+  await expect(
+    page
+      .getByRole('heading', { name: 'Open issues' })
+      .locator('..')
+      .locator('strong')
+  ).toHaveText('2+');
 });
 
 test('searches, filters, expands and handles an empty view', async ({
@@ -76,7 +73,7 @@ test('retains the last snapshot on API failure and recovers on retry', async ({
   await page.route('**/api/apps', (route) =>
     route.fulfill({
       status: 503,
-      json: { error: 'Snapshot storage unavailable' },
+      json: { error: 'Service unavailable' },
     })
   );
   await page.getByRole('button', { name: 'Refresh', exact: true }).click();

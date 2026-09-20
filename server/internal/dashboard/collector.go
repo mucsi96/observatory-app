@@ -21,7 +21,7 @@ type CollectorOptions struct {
 	GitHubClient        *http.Client
 }
 
-// Collector reads upstream systems; persistence and HTTP handlers are separate.
+// Collector reads upstream systems; snapshot caching and HTTP handlers are separate.
 type Collector struct {
 	environment   string
 	apps          []App

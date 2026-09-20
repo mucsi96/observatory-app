@@ -1,14 +1,14 @@
 import { test as base } from '@playwright/test';
-import { cleanupDbRecords, waitForSnapshot } from './utils';
+import { waitForSnapshot } from './utils';
 
 export const test = base.extend({
   page: async ({ page }, use, testInfo) => {
+    const resetAt = Date.now();
     const reset = await fetch('http://localhost:3071/reset', {
       method: 'POST',
     });
     if (!reset.ok) throw new Error('Mock upstream reset failed');
-    await cleanupDbRecords();
-    await waitForSnapshot();
+    await waitForSnapshot(resetAt);
     const logs: string[] = [];
     page.on('console', (message) =>
       logs.push(`[${message.type()}] ${message.text()}`)

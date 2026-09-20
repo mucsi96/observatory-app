@@ -25,7 +25,7 @@ const name=path.basename(process.argv[1]);const args=process.argv.slice(2);
 if(name==='az'){console.log('test-kubeconfig');}
 if(name==='kubectl'&&args[0]==='get'){
   if(args[1]==='configmap')console.log(JSON.stringify({data:{'config.json':JSON.stringify({environment:'test',apps:[{namespace:'observatory',url:'https://apps.example.com'}],auth:{apiClientId:'test-api-id'}})}}));
-  else console.log(JSON.stringify({items:[{metadata:{name:'observatory-database'},data:{DB_HOST:Buffer.from('postgres.db').toString('base64'),DB_PASSWORD:Buffer.from('a quoted secret with spaces').toString('base64')}},{metadata:{name:'observatory-github'},data:{token:Buffer.from('test-github-token').toString('base64')}}]}));
+  else { if(args[1]!=='secret'||args[2]!=='observatory-github')process.exit(1);console.log(JSON.stringify({data:{token:Buffer.from('test-github-token').toString('base64')}})); }
 }
 if(name==='helm'&&args[0]==='upgrade'){
   const file=args[args.lastIndexOf('-f')+1];
@@ -68,7 +68,10 @@ if(name==='helm'&&args[0]==='upgrade'){
     expect(calls[1].args[calls[1].args.indexOf('--version') + 1]).toBe(
       '22.0.0'
     );
-    expect(calls[0].values.env.DB_PASSWORD).toBe('a quoted secret with spaces');
+    expect(Object.keys(calls[0].values.env).sort()).toEqual([
+      'CONFIG_FILE',
+      'GITHUB_TOKEN',
+    ]);
     expect(calls[0].values.env.GITHUB_TOKEN).toBe('test-github-token');
     expect(calls[0].values.env.CONFIG_FILE).toBe('/config/config.json');
     expect(
@@ -83,7 +86,6 @@ if(name==='helm'&&args[0]==='upgrade'){
       await expect(access(call.file)).rejects.toThrow();
     }
     expect(stdout).not.toContain('test-github-token');
-    expect(stdout).not.toContain('a quoted secret with spaces');
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

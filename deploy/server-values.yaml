@@ -1,7 +1,7 @@
 appPort: 8080
 managementPort: 8082
 basePath: /api
-serviceAccountName: observatory
+serviceAccountName: observatory-api-workload-identity
 health:
   livenessPath: /health/liveness
   readinessPath: /health/readiness
