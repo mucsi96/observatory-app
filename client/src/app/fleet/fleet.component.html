@@ -1,0 +1,283 @@
+<section class="intro">
+  <div>
+    <p class="eyebrow">YOUR APPLICATIONS, AT A GLANCE</p>
+    <h1>Application fleet</h1>
+    <p class="muted">Health, releases, and work in motion.</p>
+  </div>
+  <div class="sync">
+    <span role="status">
+      @if (fleet.snapshot(); as snapshot) {
+        {{ snapshot.environment }} · Updated
+        {{ snapshot.updatedAt | date: 'shortTime' }}
+      }</span
+    ><button
+      mat-flat-button
+      bt-color="primary"
+      (click)="fleet.reload()"
+      [disabled]="fleet.data.isLoading()"
+    >
+      Refresh
+    </button>
+  </div>
+</section>
+@if (fleet.data.isLoading()) {
+  <div aria-label="Loading fleet signals"><bt-bar-loader /></div>
+}
+@if (fleet.data.error()) {
+  <div class="bt-notification bt-notification--error" role="alert">
+    Could not update fleet signals.
+    @if (fleet.snapshot()) {
+      Showing the last received snapshot.
+    }
+    <button mat-button (click)="fleet.reload()">Retry</button>
+  </div>
+}
+@if (fleet.stale()) {
+  <p class="bt-notification" role="status">
+    Signals are stale. Showing the last collected snapshot.
+  </p>
+}
+@if (hasErrors()) {
+  <p class="bt-notification" role="status">
+    Some signals are unavailable. Expand an application for details. + indicates
+    a partial total.
+  </p>
+}
+@if (fleet.snapshot()) {
+  <section class="metrics" aria-label="Fleet overview">
+    <mat-card
+      ><mat-card-content
+        ><h2>Applications</h2>
+        <strong>{{ applications().length }}</strong>
+        <p>in your production fleet</p></mat-card-content
+      ></mat-card
+    >
+    <mat-card
+      ><mat-card-content
+        ><h2>Healthy</h2>
+        <strong>{{ healthy() }}</strong>
+        <p>
+          {{ applications().length - healthy() }} need a closer look
+        </p></mat-card-content
+      ></mat-card
+    >
+    <mat-card
+      ><mat-card-content
+        ><h2>Open MRs / PRs</h2>
+        <strong>{{ total('openMRs') }}</strong>
+        <p>changes on the horizon</p></mat-card-content
+      ></mat-card
+    >
+    <mat-card
+      ><mat-card-content
+        ><h2>Open issues</h2>
+        <strong>{{ total('issues') }}</strong>
+        <p>ideas and fixes to explore</p></mat-card-content
+      ></mat-card
+    >
+  </section>
+  <section aria-label="Applications">
+    <div class="toolbar">
+      <p>{{ filtered().length }} applications</p>
+      <div class="controls">
+        <mat-form-field
+          ><mat-label>Find an application</mat-label
+          ><input
+            matInput
+            type="search"
+            [ngModel]="search()"
+            (ngModelChange)="search.set($event)" /></mat-form-field
+        ><mat-form-field
+          ><mat-label>Filter applications</mat-label
+          ><mat-select [ngModel]="filter()" (ngModelChange)="filter.set($event)"
+            ><mat-option value="all">All applications</mat-option
+            ><mat-option value="attention">Needs attention</mat-option
+            ><mat-option value="healthy">Healthy</mat-option></mat-select
+          ></mat-form-field
+        >
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table
+        mat-table
+        [dataSource]="filtered()"
+        multiTemplateDataRows
+        aria-label="Application fleet"
+      >
+        <ng-container matColumnDef="application"
+          ><th mat-header-cell *matHeaderCellDef>Application</th>
+          <td mat-cell *matCellDef="let app">
+            <button
+              mat-button
+              (click)="toggle(app.namespace)"
+              [attr.aria-expanded]="expanded().has(app.namespace)"
+              [attr.aria-controls]="
+                expanded().has(app.namespace)
+                  ? 'details-' + app.namespace
+                  : null
+              "
+            >
+              {{ app.name }}
+              {{ expanded().has(app.namespace) ? '−' : '+' }}</button
+            ><span class="muted block">{{ app.namespace }}</span>
+          </td></ng-container
+        >
+        <ng-container matColumnDef="health"
+          ><th mat-header-cell *matHeaderCellDef>Health</th>
+          <td mat-cell *matCellDef="let app">
+            <app-status-badge [status]="app.health" /></td
+        ></ng-container>
+        <ng-container matColumnDef="version"
+          ><th mat-header-cell *matHeaderCellDef>Production version</th>
+          <td mat-cell *matCellDef="let app">
+            @for (image of images(app); track image) {
+              <code class="block" [title]="image">{{ tag(image) }}</code>
+            } @empty {
+              <span class="muted">Not available</span>
+            }
+          </td></ng-container
+        >
+        <ng-container matColumnDef="deployment"
+          ><th mat-header-cell *matHeaderCellDef>Last deployment</th>
+          <td mat-cell *matCellDef="let app">
+            @if (app.repositoryData?.deployment; as deployment) {
+              <a
+                [href]="safeURL(deployment.url)"
+                target="_blank"
+                rel="noopener noreferrer"
+                >{{ deployment.status.replaceAll('_', ' ') }}</a
+              ><span class="muted block">{{
+                deployment.updatedAt | date: 'short'
+              }}</span>
+            } @else {
+              <span class="muted">No recent deploy data</span>
+            }
+          </td></ng-container
+        >
+        <ng-container matColumnDef="mrs"
+          ><th mat-header-cell *matHeaderCellDef>MRs / PRs</th>
+          <td mat-cell *matCellDef="let app">
+            @if (app.repositoryData; as repo) {
+              <a
+                [href]="'https://github.com/' + app.repository + '/pulls'"
+                target="_blank"
+                rel="noopener noreferrer"
+                >{{ repo.openMRs }}</a
+              >
+            } @else {
+              —
+            }
+          </td></ng-container
+        >
+        <ng-container matColumnDef="issues"
+          ><th mat-header-cell *matHeaderCellDef>Issues</th>
+          <td mat-cell *matCellDef="let app">
+            @if (app.repositoryData; as repo) {
+              <a
+                [href]="'https://github.com/' + app.repository + '/issues'"
+                target="_blank"
+                rel="noopener noreferrer"
+                >{{ repo.issues }}</a
+              >
+            } @else {
+              —
+            }
+          </td></ng-container
+        >
+        <ng-container matColumnDef="details"
+          ><td mat-cell *matCellDef="let app" [attr.colspan]="columns.length">
+            @if (expanded().has(app.namespace)) {
+              <section
+                class="details"
+                [id]="'details-' + app.namespace"
+                [attr.aria-label]="app.name + ' details'"
+              >
+                <div class="links">
+                  <a
+                    mat-button
+                    [href]="safeURL(app.url)"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >Open application ↗</a
+                  >
+                  @if (app.repository) {
+                    <a
+                      mat-button
+                      [href]="'https://github.com/' + app.repository"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      >Repository ↗</a
+                    >
+                  }
+                </div>
+                <div class="detail-grid">
+                  <div>
+                    <h3>Production workloads</h3>
+                    @for (workload of app.workloads; track workload.name) {
+                      <article>
+                        <strong>{{ workload.name }}</strong
+                        ><span class="muted block"
+                          >{{ workload.ready }} /
+                          {{ workload.desired }} replicas available</span
+                        >
+                        @for (image of workload.images; track image) {
+                          <code class="block">{{ image }}</code>
+                        }
+                        <app-status-badge [status]="workload.status" />
+                      </article>
+                    } @empty {
+                      <p class="muted">No deployment data available.</p>
+                    }
+                  </div>
+                  <div>
+                    <h3>Merge requests / pull requests</h3>
+                    @if (app.repositoryData; as repo) {
+                      @for (mr of repo.mrs; track mr.number) {
+                        <article>
+                          <a
+                            [href]="safeURL(mr.url)"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            >#{{ mr.number }} {{ mr.title }}</a
+                          >
+                          @if (mr.draft) {
+                            <span class="muted block">Draft</span>
+                          }
+                          <app-status-badge [status]="mr.pipeline" />
+                        </article>
+                      } @empty {
+                        <p class="muted">All clear. No open merge requests.</p>
+                      }
+                    } @else {
+                      <p class="muted">Repository data unavailable.</p>
+                    }
+                  </div>
+                </div>
+                @for (error of app.errors; track error) {
+                  <p class="error">{{ error }}</p>
+                }
+              </section>
+            }
+          </td></ng-container
+        >
+        <tr mat-header-row *matHeaderRowDef="columns"></tr>
+        <tr mat-row *matRowDef="let row; columns: columns"></tr>
+        <tr
+          mat-row
+          *matRowDef="let row; columns: ['details']"
+          class="detail-row"
+          [class.expanded]="expanded().has(row.namespace)"
+        ></tr>
+        <tr class="mat-row" *matNoDataRow>
+          <td [attr.colspan]="columns.length" class="empty">
+            No applications match this view. Try another search or filter.
+          </td>
+        </tr>
+      </table>
+    </div>
+    <p class="muted">
+      Health reflects Kubernetes readiness · Versions are deployed container
+      images · Expand an app for workload and MR details
+    </p>
+  </section>
+}

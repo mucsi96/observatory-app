@@ -1,0 +1,9 @@
+appPort: 8000
+basePath: /
+resources:
+  requests:
+    cpu: 5m
+    memory: 16Mi
+  limits:
+    cpu: null
+    memory: 64Mi

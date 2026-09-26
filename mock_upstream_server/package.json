@@ -1,0 +1,11 @@
+{
+  "name": "observatory-mock-upstream",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "5.2.1"
+  }
+}

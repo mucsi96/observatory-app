@@ -1,0 +1,11 @@
+entryPoints:
+  web:
+    address: ':80'
+  traefik:
+    address: ':8081'
+providers:
+  file:
+    filename: /etc/traefik/routes.yaml
+ping: {}
+log:
+  level: INFO

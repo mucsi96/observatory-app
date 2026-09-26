@@ -1,0 +1,19 @@
+http:
+  routers:
+    server:
+      rule: 'PathPrefix(`/api`)'
+      priority: 2
+      service: server
+      entryPoints: [web]
+    client:
+      rule: 'PathPrefix(`/`)'
+      priority: 1
+      service: client
+      entryPoints: [web]
+  services:
+    server:
+      loadBalancer:
+        servers: [{ url: 'http://127.0.0.1:8074' }]
+    client:
+      loadBalancer:
+        servers: [{ url: 'http://127.0.0.1:8000' }]

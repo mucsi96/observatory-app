@@ -3,3 +3,10 @@
 /.kube/
 /.env
 /.env.*
+node_modules/
+dist/
+.angular/
+out-tsc/
+test-results/
+playwright-report/
+/server/server

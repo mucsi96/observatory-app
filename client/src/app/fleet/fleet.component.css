@@ -1,0 +1,114 @@
+.intro,
+.sync,
+.toolbar,
+.controls,
+.links {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.intro,
+.toolbar {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+h1 {
+  font-size: clamp(28px, 4vw, 42px);
+  margin: 8px 0;
+}
+.eyebrow {
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: var(--mat-sys-primary);
+}
+.muted {
+  color: var(--mat-sys-on-surface-variant);
+  font-size: 13px;
+}
+.block {
+  display: block;
+  margin-top: 4px;
+}
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin: 24px 0;
+}
+.metrics h2 {
+  font-size: 14px;
+  font-weight: 500;
+}
+.metrics strong {
+  font-size: 36px;
+}
+.metrics p {
+  color: var(--mat-sys-on-surface-variant);
+  font-size: 12px;
+}
+.controls {
+  flex-wrap: wrap;
+}
+.table-wrap {
+  overflow-x: auto;
+}
+table {
+  width: 100%;
+}
+td {
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+code {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.detail-row {
+  height: 0;
+}
+.detail-row:not(.expanded) td {
+  padding: 0;
+  border-bottom-width: 0;
+}
+.details {
+  padding: 16px;
+}
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+.detail-grid article {
+  margin-bottom: 16px;
+}
+.detail-grid app-status-badge {
+  display: block;
+  margin-top: 8px;
+}
+.error {
+  color: var(--bt-error);
+}
+.empty {
+  padding: 32px;
+  text-align: center;
+}
+@media (max-width: 800px) {
+  .metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .detail-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 500px) {
+  .controls,
+  mat-form-field {
+    width: 100%;
+  }
+  .metrics {
+    gap: 8px;
+  }
+  .details {
+    padding: 8px;
+  }
+}

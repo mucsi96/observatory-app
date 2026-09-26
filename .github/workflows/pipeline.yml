@@ -19,19 +19,53 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            client/package-lock.json
+            test/package-lock.json
+            mock_upstream_server/package-lock.json
       - uses: actions/setup-go@v6
         with:
           go-version: '1.26'
-          cache: false
-      - run: go test -race ./...
+          cache-dependency-path: server/go.sum
       - run: go vet ./...
-      - run: node --check web/app.js
-      - run: bash -n scripts/deploy.sh
+        working-directory: server
+      - run: npm ci
+        working-directory: test
+      - run: npx tsc --noEmit
+        working-directory: test
+      - run: npx playwright install --with-deps chromium
+        working-directory: test
+      - run: bash -n scripts/deploy.sh scripts/pod_up.sh scripts/pod_down.sh
+      - name: Start real test stack
+        run: bash scripts/pod_up.sh
+      - name: Go race tests
+        run: go test -race ./...
+        working-directory: server
+      - run: npm test
+        working-directory: test
+      - name: Upload test artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results
+          path: |
+            test/test-results/
+            test/playwright-report/
+      - name: Stop test stack
+        if: always()
+        run: bash scripts/pod_down.sh
 
   publish:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: test
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        component: [server, client]
     permissions:
       contents: read
       packages: write
@@ -44,9 +78,9 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - uses: docker/build-push-action@v6
         with:
-          context: .
+          context: ./${{ matrix.component }}
           push: true
-          tags: ghcr.io/${{ github.repository }}:sha-${{ github.sha }}
+          tags: ghcr.io/${{ github.repository }}-${{ matrix.component }}:sha-${{ github.sha }}
           labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
 
   deploy:
@@ -67,11 +101,15 @@ jobs:
       - uses: azure/use-kubelogin@v1
         with:
           kubelogin-version: 'v0.2.7'
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.19.0
       - uses: twingate/github-action@v1
         with:
           service-key: ${{ secrets.TWINGATE_SERVICE_KEY }}
       - name: Deploy to Kubernetes
         env:
           AZURE_KEYVAULT_NAME: ${{ secrets.AZURE_KEYVAULT_NAME }}
-          DASHBOARD_IMAGE: ghcr.io/${{ github.repository }}:sha-${{ github.sha }}
+          SERVER_IMAGE: ghcr.io/${{ github.repository }}-server:sha-${{ github.sha }}
+          CLIENT_IMAGE: ghcr.io/${{ github.repository }}-client:sha-${{ github.sha }}
         run: bash scripts/deploy.sh

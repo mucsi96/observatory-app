@@ -1,0 +1,17 @@
+@use '@mucsi96/angular-material-theme/styles' as bt;
+html {
+  @include bt.theme();
+}
+html,
+body {
+  min-height: 100%;
+}
+body {
+  margin: 0;
+}
+* {
+  box-sizing: border-box;
+}
+a {
+  color: var(--mat-sys-primary);
+}

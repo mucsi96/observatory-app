@@ -1,0 +1,20 @@
+<mat-toolbar
+  ><nav aria-label="Main navigation">
+    <a mat-button routerLink="/">◈ Observatory</a>
+    @if (auth.isAuthenticated()) {
+      <app-header />
+    }</nav
+></mat-toolbar>
+<main>
+  @if (auth.authError(); as error) {
+    <section class="bt-notification bt-notification--error" role="alert">
+      <h1>Sign-in failed</h1>
+      <p>{{ error }}</p>
+      <button mat-flat-button bt-color="primary" (click)="auth.login()">
+        Try again
+      </button>
+    </section>
+  } @else {
+    <router-outlet />
+  }
+</main>
