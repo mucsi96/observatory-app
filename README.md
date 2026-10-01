@@ -10,13 +10,14 @@ Provisioning lives in [k8s-modules](https://github.com/mucsi96/k8s-modules), mod
 
 ## Development
 
-Requires Go 1.24+ (CI uses 1.26). Node is needed only for the JS syntax check.
+Requires Go 1.24+ (CI uses 1.26). Node 18+ is needed only for JS syntax and UI tests.
 
 ```bash
 CONFIG_FILE=config.example.json go run .
 go test -race ./...
 go vet ./...
 node --check web/app.js
+node --test scripts/app.test.cjs
 bash -n scripts/deploy.sh
 ```
 
@@ -41,6 +42,17 @@ the container uses `LISTEN_ADDR=:8080` and runs as a non-root static binary.
   commit statuses are combined for the current head SHA. Failures take precedence
   over running checks; no checks is distinct from passed; API errors are unknown.
 - **Issues:** open GitHub issues excluding PRs. Incomplete searches are rejected.
+- **Dependency update:** latest run of `update_dependencies.yml`, the fleet's
+  self-hosted Renovate workflow, with its status, timestamp and run link. Workflow
+  discovery is paginated and its history is queried directly so weekly runs are
+  not hidden by frequent delivery runs. The newest local `renovate/*` PR by
+  creation time is linked, including closed/merged PRs, using paginated PR history.
+  GitHub has no direct Renovate run-to-PR association: the PR is identified by its
+  branch convention and displayed independently of the run. It can come from an
+  earlier run, since successful runs may produce no changes. Missing PRs are
+  reported explicitly; no workflow/runs is distinct from an API error.
+  Dependency API errors preserve other repository signals and any
+  already-collected run status. Failed update runs appear in **Needs attention**.
 
 The backend collects up to four apps concurrently, with request timeouts and a
 50-second collection deadline, then waits 60 seconds before collecting again.

@@ -19,10 +19,11 @@ type Run struct {
 	UpdatedAt string `json:"updatedAt"`
 }
 type RepositoryData struct {
-	OpenMRs    int           `json:"openMRs"`
-	Issues     int           `json:"issues"`
-	MRs        []PullRequest `json:"mrs"`
-	Deployment *Run          `json:"deployment"`
+	OpenMRs          int               `json:"openMRs"`
+	Issues           int               `json:"issues"`
+	MRs              []PullRequest     `json:"mrs"`
+	Deployment       *Run              `json:"deployment"`
+	DependencyUpdate *DependencyUpdate `json:"dependencyUpdate"`
 }
 
 // Count issues separately from PRs and combine checks with legacy commit statuses.

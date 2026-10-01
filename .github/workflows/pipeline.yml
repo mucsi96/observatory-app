@@ -26,6 +26,7 @@ jobs:
       - run: go test -race ./...
       - run: go vet ./...
       - run: node --check web/app.js
+      - run: node --test scripts/app.test.cjs
       - run: bash -n scripts/deploy.sh
 
   publish:
