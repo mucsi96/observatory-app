@@ -38,6 +38,7 @@ func TestDependencyUpdate(t *testing.T) {
 		{name: "running", runs: strings.Replace(run, `"completed"`, `"in_progress"`, 1), wantStatus: "in_progress"},
 		{name: "no workflow", noWorkflow: true},
 		{name: "no runs"},
+		{name: "no runs retains existing PR", prs: pr(3, "renovate/go", "o/r", "2026-09-01T10:00:00Z", "2026-09-01T10:06:00Z", "null"), wantPR: 3},
 		{name: "workflow API error", failPath: "/repos/o/r/actions/workflows"},
 		{name: "run API error", failPath: "/repos/o/r/actions/workflows/12/runs"},
 		{name: "PR error preserves run", runs: run, failPath: "/repos/o/r/pulls", wantStatus: "success"},

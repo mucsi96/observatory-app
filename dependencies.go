@@ -58,15 +58,14 @@ func (d *Dashboard) dependencyUpdate(ctx context.Context, repo string) (*Depende
 	if err := getJSON(ctx, d.github, fmt.Sprintf("%s/actions/workflows/%d/runs?per_page=1", base, workflowID), d.githubToken, &data); err != nil {
 		return result, err
 	}
-	if len(data.Runs) == 0 {
-		return result, nil
+	if len(data.Runs) > 0 {
+		run := data.Runs[0]
+		status := run.Status
+		if status == "completed" {
+			status = run.Conclusion
+		}
+		result.Run = &Run{Status: status, URL: run.HTMLURL, UpdatedAt: run.UpdatedAt}
 	}
-	run := data.Runs[0]
-	status := run.Status
-	if status == "completed" {
-		status = run.Conclusion
-	}
-	result.Run = &Run{Status: status, URL: run.HTMLURL, UpdatedAt: run.UpdatedAt}
 	// GitHub has no direct run-to-PR association for Renovate. Show the newest
 	// local renovate/* PR independently: a successful run may create no PRs.
 	for page := 1; ; page++ {

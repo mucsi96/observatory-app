@@ -36,6 +36,9 @@ test("dependency run states, missing data and safe PR links", () => {
   assert.doesNotMatch(render(update), /<script>|href="javascript:/);
   update.mr.url = "https://github.com/o/r/pull/42";
   assert.match(render(update), /href="https:\/\/github.com\/o\/r\/pull\/42"/);
+  const withoutRun = render({ mr: update.mr });
+  assert.match(withoutRun, /No dependency update runs/);
+  assert.match(withoutRun, /href="https:\/\/github.com\/o\/r\/pull\/42"/);
 });
 
 test("failed dependency update appears in attention filter and seven-column rows", () => {
@@ -53,6 +56,9 @@ test("failed dependency update appears in attention filter and seven-column rows
   assert.match(element("apps").innerHTML, /badge bad/);
   assert.match(element("apps").innerHTML, /colspan="7"/);
   assert.equal((element("apps").innerHTML.split('<tr class="details"')[0].match(/<td>/g) || []).length, 7);
+  vm.runInContext('snapshot.apps[0].repositoryData.dependencyUpdate.run.status = "stale"; render();', context);
+  assert.equal(element("visible-count").textContent, 1);
+  assert.match(element("apps").innerHTML, /badge bad">stale/);
   vm.runInContext('snapshot.apps[0].repositoryData.dependencyUpdate.run.status = "success"; render();', context);
   assert.equal(element("visible-count").textContent, 0);
   assert.match(element("apps").innerHTML, /colspan="7" class="empty"/);

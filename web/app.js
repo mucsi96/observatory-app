@@ -9,7 +9,7 @@ const link = (url, text, cls = "") => {
   try { if (new URL(url).protocol !== "https:") return escapeHTML(text); } catch { return escapeHTML(text); }
   return `<a class="${cls}" href="${escapeHTML(url)}" target="_blank" rel="noopener noreferrer">${escapeHTML(text)}</a>`;
 };
-const tone = (status) => ["healthy", "passed", "success"].includes(status) ? "good" : ["unhealthy", "failed", "failure", "cancelled", "timed_out", "action_required", "startup_failure"].includes(status) ? "bad" : ["running", "queued", "in_progress", "deploying", "degraded", "pending", "waiting", "requested"].includes(status) ? "pending" : "neutral";
+const tone = (status) => ["healthy", "passed", "success"].includes(status) ? "good" : ["unhealthy", "failed", "failure", "cancelled", "timed_out", "action_required", "startup_failure", "stale"].includes(status) ? "bad" : ["running", "queued", "in_progress", "deploying", "degraded", "pending", "waiting", "requested"].includes(status) ? "pending" : "neutral";
 const badge = (status) => `<span class="badge ${tone(status)}">${escapeHTML(status.replaceAll("_", " "))}</span>`;
 const age = (date) => { const minutes = Math.max(0, Math.floor((Date.now() - new Date(date)) / 60000)); return minutes < 1 ? "just now" : minutes < 60 ? `${minutes}m ago` : minutes < 1440 ? `${Math.floor(minutes / 60)}h ago` : `${Math.floor(minutes / 1440)}d ago`; };
 const tag = (image) => image.includes("@") ? image.split("@")[1].slice(0, 19) : image.slice(image.lastIndexOf("/") + 1).includes(":") ? image.slice(image.lastIndexOf(":") + 1) : "latest (implicit)";
@@ -42,7 +42,7 @@ function render() {
   $("notice").hidden = !stale && !apps.some(a => a.errors.length);
   $("notice").textContent = stale ? "Signals are stale. The last snapshot is shown below; check the dashboard collector." : "Some signals are unavailable. Expand an application for details. + indicates a partial total.";
   const query = $("search").value.toLowerCase().trim();
-  const filtered = apps.filter(a => `${a.name} ${a.namespace} ${a.repository}`.toLowerCase().includes(query)).filter(a => $("filter").value === "all" || ($("filter").value === "healthy" ? a.health === "healthy" : a.health !== "healthy" || a.errors.length || a.repositoryData?.mrs.some(m => m.pipeline === "failed") || ["failure", "cancelled", "timed_out"].includes(a.repositoryData?.deployment?.status) || ["failure", "cancelled", "timed_out", "action_required", "startup_failure"].includes(a.repositoryData?.dependencyUpdate?.run?.status)));
+  const filtered = apps.filter(a => `${a.name} ${a.namespace} ${a.repository}`.toLowerCase().includes(query)).filter(a => $("filter").value === "all" || ($("filter").value === "healthy" ? a.health === "healthy" : a.health !== "healthy" || a.errors.length || a.repositoryData?.mrs.some(m => m.pipeline === "failed") || ["failure", "cancelled", "timed_out"].includes(a.repositoryData?.deployment?.status) || ["failure", "cancelled", "timed_out", "action_required", "startup_failure", "stale"].includes(a.repositoryData?.dependencyUpdate?.run?.status)));
   $("visible-count").textContent = filtered.length;
   $("apps").innerHTML = filtered.map(app => {
     const repo = app.repositoryData;
