@@ -74,9 +74,6 @@ func (d *Dashboard) repository(ctx context.Context, repo, workflow string) (*Rep
 	result.OpenMRs = len(result.MRs)
 	// Existing app delivery workflows have a deploy job; report that job rather
 	// than an unrelated review/renovate workflow or the latest successful release.
-	if workflow == "" {
-		workflow = "pipeline.yml"
-	}
 	var runs struct {
 		Runs []struct {
 			ID        int64
@@ -89,7 +86,12 @@ func (d *Dashboard) repository(ctx context.Context, repo, workflow string) (*Rep
 		return nil, err
 	}
 	for _, run := range runs.Runs {
-		if run.Path != ".github/workflows/"+workflow {
+		matchesWorkflow := run.Path == ".github/workflows/"+workflow
+		if workflow == "" {
+			// Some applications still use the legacy delivery workflow name.
+			matchesWorkflow = run.Path == ".github/workflows/pipeline.yml" || run.Path == ".github/workflows/build.yml"
+		}
+		if !matchesWorkflow {
 			continue
 		}
 		var jobs struct {

@@ -34,9 +34,11 @@ the container uses `LISTEN_ADDR=:8080` and runs as a non-root static binary.
 - **Production version:** Deployment container image tags/digests, with separate
   frontend/backend images. Expand a row for full image references.
 - **Last deployment:** the most recent `deploy` job found in the latest 20 main
-  branch workflow runs, restricted to `pipeline.yml` to exclude Pages deployments.
-  App descriptors can override `deploymentWorkflow`. An absent job is shown as
-  no recent deploy data. This repository uses the same `pipeline.yml` convention.
+  branch workflow runs, restricted to `pipeline.yml` and legacy `build.yml` delivery
+  workflows (including Training Log Pro) to exclude unrelated Pages deployments.
+  App descriptors can set `deploymentWorkflow` to restrict this to a single workflow.
+  An absent job is shown as no recent deploy data. This repository uses the
+  `pipeline.yml` convention.
 - **MRs / PRs:** all open GitHub PRs (paginated), including drafts. Checks and legacy
   commit statuses are combined for the current head SHA. Failures take precedence
   over running checks; no checks is distinct from passed; API errors are unknown.
