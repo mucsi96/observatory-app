@@ -23,22 +23,23 @@ test("dependency run states, missing data and safe PR links", () => {
   assert.match(render(null), /Unavailable/);
   assert.match(render({}), /No dependency update runs/);
   assert.match(render({ error: "upstream HTTP 403" }), /Unknown/);
-  const update = { run: { status: "failure", url: "https://github.com/o/r/actions/runs/1", updatedAt: new Date().toISOString() } };
+  const update = { outcome: "no PR created", run: { status: "failure", url: "https://github.com/o/r/actions/runs/1", updatedAt: new Date().toISOString() } };
   assert.match(render(update), /badge bad/);
-  assert.match(render(update), /No Renovate PR found/);
+  assert.match(render(update), /No PR created by this run/);
   assert.match(render(update), /href="https:\/\/github.com\/o\/r\/actions\/runs\/1"/);
   update.error = "PR lookup failed";
   assert.match(render(update), /Some dependency signals unavailable/);
-  assert.doesNotMatch(render(update), /No Renovate PR found/);
-  update.mr = { number: 42, title: '<script>alert("x")</script>', url: "javascript:alert(1)", state: "merged" };
+  assert.doesNotMatch(render(update), /No PR created by this run/);
+  assert.match(render(update), /PR creation unverified/);
+  update.mrs = [{ number: 42, title: '<script>alert("x")</script>', url: "javascript:alert(1)", state: "merged" }];
   assert.match(render(update), /#42 &lt;script&gt;/);
   assert.match(render(update), /merged/);
   assert.doesNotMatch(render(update), /<script>|href="javascript:/);
-  update.mr.url = "https://github.com/o/r/pull/42";
+  update.mrs[0].url = "https://github.com/o/r/pull/42";
   assert.match(render(update), /href="https:\/\/github.com\/o\/r\/pull\/42"/);
-  const withoutRun = render({ mr: update.mr });
-  assert.match(withoutRun, /No dependency update runs/);
-  assert.match(withoutRun, /href="https:\/\/github.com\/o\/r\/pull\/42"/);
+  delete update.error;
+  update.outcome = "PR created";
+  assert.match(render(update), /PRs created by this run:/);
 });
 
 test("failed dependency update appears in attention filter and seven-column rows", () => {
@@ -47,6 +48,7 @@ test("failed dependency update appears in attention filter and seven-column rows
     name: "Example", namespace: "example", url: "https://example.com", repository: "o/r",
     health: "healthy", errors: [], workloads: [],
     repositoryData: { openMRs: 0, issues: 0, mrs: [], dependencyUpdate: {
+      outcome: "PR created",
       run: { status: "failure", url: "https://github.com/o/r/actions/runs/1", updatedAt: new Date().toISOString() },
     } },
   };
@@ -62,4 +64,12 @@ test("failed dependency update appears in attention filter and seven-column rows
   vm.runInContext('snapshot.apps[0].repositoryData.dependencyUpdate.run.status = "success"; render();', context);
   assert.equal(element("visible-count").textContent, 0);
   assert.match(element("apps").innerHTML, /colspan="7" class="empty"/);
+  vm.runInContext('snapshot.apps[0].repositoryData.dependencyUpdate.outcome = "no PR created"; render();', context);
+  assert.equal(element("visible-count").textContent, 1);
+  assert.match(element("apps").innerHTML, /No PR created by this run/);
+  vm.runInContext('snapshot.apps[0].repositoryData.dependencyUpdate.outcome = "unknown"; render();', context);
+  assert.equal(element("visible-count").textContent, 1);
+  assert.match(element("apps").innerHTML, /PR creation unverified/);
+  vm.runInContext('snapshot.apps[0].repositoryData.dependencyUpdate.outcome = "pending"; snapshot.apps[0].repositoryData.dependencyUpdate.run.status = "in_progress"; render();', context);
+  assert.equal(element("visible-count").textContent, 0);
 });

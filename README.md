@@ -45,14 +45,23 @@ the container uses `LISTEN_ADDR=:8080` and runs as a non-root static binary.
 - **Dependency update:** latest run of `update_dependencies.yml`, the fleet's
   self-hosted Renovate workflow, with its status, timestamp and run link. Workflow
   discovery is paginated and its history is queried directly so weekly runs are
-  not hidden by frequent delivery runs. The newest local `renovate/*` PR by
-  creation time is linked, including closed/merged PRs, using paginated PR history.
-  GitHub has no direct Renovate run-to-PR association: the PR is identified by its
-  branch convention and displayed independently of the run. It can come from an
-  earlier run, since successful runs may produce no changes. Missing PRs are
-  reported explicitly; no workflow/runs is distinct from an API error.
-  Dependency API errors preserve other repository signals and any
-  already-collected run status. Failed update runs appear in **Needs attention**.
+  not hidden by frequent delivery runs. PR links come **only from explicit Renovate
+  `PR created` events in the latest run attempt's logs**, scoped to that repository.
+  All PRs created by that attempt are linked, including ones since closed/merged.
+  Existing/updated PRs, timestamps, branch names, and previous attempts are never
+  substituted as evidence of creation. The fleet's plain-text Renovate log format
+  with timestamps and repository-scoped events is required (`LOG_LEVEL=debug`
+  in the current workflows); a repository-finished event must also be present.
+  A completed run with no creation event shows **No PR created by this run** and
+  appears in **Needs attention**, even when the workflow is green. This is a
+  review signal, not proof of failure: a run may legitimately have no updates or
+  update an existing PR. Running workflows show **Awaiting run result**. Missing,
+  expired, oversized, or unrecognized logs are **unverified**, never evidence of
+  success. Log downloads require Actions read access and are bounded to 16 MiB
+  compressed and total decompressed content per app per collection. Logs and
+  signed download URLs stay server-side; credentials are not sent to log storage.
+  Dependency API errors preserve other repository signals and any collected run
+  status. No workflow/runs remains distinct from an API error.
 
 The backend collects up to four apps concurrently, with request timeouts and a
 50-second collection deadline, then waits 60 seconds before collecting again.

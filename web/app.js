@@ -17,9 +17,12 @@ const tag = (image) => image.includes("@") ? image.split("@")[1].slice(0, 19) : 
 function dependencyStatus(update) {
   if (!update) return '<span class="sub">Unavailable</span>';
   const run = update.run;
-  const mr = update.mr;
-  return `${run ? `${badge(run.status)} ${link(run.url, "Run ↗")}<span class="sub">${escapeHTML(age(run.updatedAt))}</span>` : `<span class="sub">${update.error ? "Unknown" : "No dependency update runs"}</span>`}${update.error ? '<span class="sub">Some dependency signals unavailable</span>' : ""}${mr ? `<span class="sub">Latest Renovate PR: ${link(mr.url, `#${mr.number} ${mr.title}`)} (${escapeHTML(mr.state)})</span>` : run && !update.error ? '<span class="sub">No Renovate PR found</span>' : ""}`;
+  const prs = update.mrs || [];
+  const evidence = !run ? "" : update.error || update.outcome === "unknown" ? '<span class="sub">PR creation unverified</span>' : update.outcome === "pending" ? '<span class="sub">Awaiting run result</span>' : update.outcome === "no PR created" ? '<span class="badge pending">No PR created by this run</span>' : '<span class="sub">PRs created by this run:</span>';
+  return `${run ? `Workflow: ${badge(run.status)} ${link(run.url, "Run ↗")}<span class="sub">${escapeHTML(age(run.updatedAt))}</span>` : `<span class="sub">${update.error ? "Unknown" : "No dependency update runs"}</span>`}${evidence}${update.error ? '<span class="sub">Some dependency signals unavailable</span>' : ""}${prs.map(mr => `<span class="sub">${link(mr.url, `#${mr.number} ${mr.title}`)} (${escapeHTML(mr.state)})</span>`).join("")}`;
 }
+
+const dependencyNeedsAttention = (update) => !!update?.run && (["failure", "cancelled", "timed_out", "action_required", "startup_failure", "stale"].includes(update.run.status) || ["no PR created", "unknown"].includes(update.outcome) || !!update.error);
 
 function details(app) {
   const repo = app.repositoryData;
@@ -42,7 +45,7 @@ function render() {
   $("notice").hidden = !stale && !apps.some(a => a.errors.length);
   $("notice").textContent = stale ? "Signals are stale. The last snapshot is shown below; check the dashboard collector." : "Some signals are unavailable. Expand an application for details. + indicates a partial total.";
   const query = $("search").value.toLowerCase().trim();
-  const filtered = apps.filter(a => `${a.name} ${a.namespace} ${a.repository}`.toLowerCase().includes(query)).filter(a => $("filter").value === "all" || ($("filter").value === "healthy" ? a.health === "healthy" : a.health !== "healthy" || a.errors.length || a.repositoryData?.mrs.some(m => m.pipeline === "failed") || ["failure", "cancelled", "timed_out"].includes(a.repositoryData?.deployment?.status) || ["failure", "cancelled", "timed_out", "action_required", "startup_failure", "stale"].includes(a.repositoryData?.dependencyUpdate?.run?.status)));
+  const filtered = apps.filter(a => `${a.name} ${a.namespace} ${a.repository}`.toLowerCase().includes(query)).filter(a => $("filter").value === "all" || ($("filter").value === "healthy" ? a.health === "healthy" : a.health !== "healthy" || a.errors.length || a.repositoryData?.mrs.some(m => m.pipeline === "failed") || ["failure", "cancelled", "timed_out"].includes(a.repositoryData?.deployment?.status) || dependencyNeedsAttention(a.repositoryData?.dependencyUpdate)));
   $("visible-count").textContent = filtered.length;
   $("apps").innerHTML = filtered.map(app => {
     const repo = app.repositoryData;
