@@ -105,6 +105,12 @@ func (d *Dashboard) collect(ctx context.Context) {
 					r.Errors = append(r.Errors, "GitHub: "+err.Error())
 				} else {
 					r.RepositoryData = data
+					update, err := d.dependencyUpdate(ctx, app.Repository)
+					data.DependencyUpdate = update
+					if err != nil {
+						update.Error = "Dependency updates: " + err.Error()
+						r.Errors = append(r.Errors, update.Error)
+					}
 				}
 			}
 			results[i] = r
