@@ -1,3 +1,4 @@
+import { Button } from '@mucsi96/react-ui';
 import { Minus, Plus } from 'lucide-react';
 import { ExternalLink } from '../../../components/ExternalLink';
 import { StatusBadge } from '../../../components/StatusBadge';
@@ -5,6 +6,8 @@ import type { ApplicationSignals } from '../schema';
 import { hostname, imageVersion, relativeAge } from '../selectors';
 import { ApplicationDetails } from './ApplicationDetails';
 import { DependencySignal } from './DependencySignal';
+import styles from './ApplicationRow.module.css';
+import signalStyles from './Signal.module.css';
 
 interface Props {
   app: ApplicationSignals;
@@ -24,16 +27,17 @@ export function ApplicationRow({ app, expanded, onToggle, now }: Props) {
     .slice(0, 2);
   return (
     <>
-      <tr className="app-row">
+      <tr className={styles.row}>
         <th scope="row">
-          <div className="app-name">
-            <span className="app-icon" aria-hidden="true">
+          <div className={styles.name}>
+            <span className={styles.icon} aria-hidden="true">
               {initials}
             </span>
             <div>
-              <button
-                className="app-toggle"
-                onClick={onToggle}
+              <Button
+                variant="text"
+                className={styles.toggle}
+                onPress={onToggle}
                 aria-expanded={expanded}
                 aria-controls={expanded ? `details-${app.namespace}` : undefined}
               >
@@ -43,16 +47,16 @@ export function ApplicationRow({ app, expanded, onToggle, now }: Props) {
                 ) : (
                   <Plus size={14} aria-hidden="true" />
                 )}
-              </button>
-              <span className="sub">{hostname(app.url)}</span>
+              </Button>
+              <span className={signalStyles.meta}>{hostname(app.url)}</span>
             </div>
           </div>
         </th>
-        <td className="technology-stack">
+        <td className={styles.technology}>
           <span>
             {app.stack?.frontend ?? 'Unknown'} / {app.stack?.backend ?? 'Unknown'}
           </span>
-          <span className="sub">Frontend / Backend</span>
+          <span className={signalStyles.meta}>Frontend / Backend</span>
         </td>
         <td>
           <StatusBadge status={app.health} />
@@ -60,12 +64,12 @@ export function ApplicationRow({ app, expanded, onToggle, now }: Props) {
         <td>
           {images.length ? (
             images.map((image) => (
-              <code className="version" title={image} key={image}>
+              <code className={signalStyles.version} title={image} key={image}>
                 {imageVersion(image)}
               </code>
             ))
           ) : (
-            <span className="sub">Not available</span>
+            <span className={signalStyles.meta}>Not available</span>
           )}
         </td>
         <td>
@@ -74,10 +78,10 @@ export function ApplicationRow({ app, expanded, onToggle, now }: Props) {
               <ExternalLink href={deployment.url}>
                 {deployment.status.replaceAll('_', ' ')}
               </ExternalLink>
-              <span className="sub">{relativeAge(deployment.updatedAt, now)}</span>
+              <span className={signalStyles.meta}>{relativeAge(deployment.updatedAt, now)}</span>
             </>
           ) : (
-            <span className="sub">No recent deploy data</span>
+            <span className={signalStyles.meta}>No recent deploy data</span>
           )}
         </td>
         <td>
@@ -86,10 +90,13 @@ export function ApplicationRow({ app, expanded, onToggle, now }: Props) {
         <td>
           {repo ? (
             <>
-              <ExternalLink href={`https://github.com/${app.repository}/pulls`} className="count">
+              <ExternalLink
+                href={`https://github.com/${app.repository}/pulls`}
+                className={styles.count}
+              >
                 {repo.openMRs}
               </ExternalLink>
-              <span className="sub">
+              <span className={signalStyles.meta}>
                 {repo.mrs.filter((pr) => pr.pipeline === 'failed').length} failing ·{' '}
                 {repo.mrs.filter((pr) => pr.pipeline === 'running').length} running
               </span>
@@ -100,7 +107,10 @@ export function ApplicationRow({ app, expanded, onToggle, now }: Props) {
         </td>
         <td>
           {repo ? (
-            <ExternalLink href={`https://github.com/${app.repository}/issues`} className="count">
+            <ExternalLink
+              href={`https://github.com/${app.repository}/issues`}
+              className={styles.count}
+            >
               {repo.issues}
             </ExternalLink>
           ) : (

@@ -1,0 +1,52 @@
+.row:hover {
+  background: color-mix(in srgb, var(--bt-text-default) 4%, transparent);
+}
+
+.technology {
+  min-width: 150px;
+  overflow-wrap: anywhere;
+}
+
+.name {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  min-width: 190px;
+}
+
+.icon {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 35px;
+  height: 35px;
+  border: 1px solid var(--bt-outline);
+  border-radius: var(--bt-radius);
+  background: color-mix(in srgb, var(--bt-primary) 20%, transparent);
+  color: var(--bt-link);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.toggle {
+  justify-content: flex-start;
+  gap: 10px;
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  font-size: inherit;
+  text-align: left;
+}
+
+.toggle svg {
+  flex-shrink: 0;
+}
+
+.count {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.count:hover {
+  color: var(--bt-link);
+}

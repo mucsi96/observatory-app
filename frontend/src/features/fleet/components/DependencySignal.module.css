@@ -1,0 +1,13 @@
+.stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 190px;
+  max-width: 280px;
+  overflow-wrap: anywhere;
+}
+
+.stack > span {
+  margin-top: 0;
+}

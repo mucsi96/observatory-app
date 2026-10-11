@@ -24,9 +24,9 @@ const pending = new Set([
 ]);
 
 export function statusTone(status: string) {
-  if (['healthy', 'passed', 'success'].includes(status)) return 'good';
-  if (failures.has(status)) return 'bad';
-  if (pending.has(status)) return 'pending';
+  if (['healthy', 'passed', 'success'].includes(status)) return 'success';
+  if (failures.has(status)) return 'error';
+  if (pending.has(status)) return 'warn';
   return 'neutral';
 }
 

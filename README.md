@@ -2,8 +2,9 @@
 
 A production fleet dashboard built with **Rust and React**. The backend uses Axum,
 Tokio, Serde, Reqwest, and kube-rs; the frontend uses React, TypeScript, Vite,
-TanStack Query, and Zod. Entra authentication uses the platform's existing OIDC
-proxy. Assets are served locally, with no external fonts or CDN dependencies.
+TanStack Query, Zod, and [React UI](https://github.com/mucsi96/react-ui). Entra
+authentication uses the platform's existing OIDC proxy. Assets are served locally,
+with no external fonts or CDN dependencies.
 
 Extracted from [p07](https://github.com/mucsi96/p07) with its application history.
 Provisioning lives in [k8s-modules](https://github.com/mucsi96/k8s-modules), module
@@ -49,6 +50,12 @@ binds to `0.0.0.0:8080`.
 - `frontend/src/features/fleet/`: schema-validated server state, React components,
   search/filter/expansion state, and signal selectors. TanStack Query owns polling,
   cancellation, focus refetches, and retention of the last successful snapshot.
+- Shared controls, cards, badges, alerts, and typography use `@mucsi96/react-ui`.
+  Component layout is co-located in CSS Modules and uses the library's public
+  `--bt-*` tokens. `frontend/src/styles.css` contains only document defaults and
+  Observatory's accent tokens; the library stylesheet is imported once in `main.tsx`.
+  [Migration notes and reusable component proposals](docs/react-ui-migration.md)
+  cover the expandable table and strict CSP integration.
 
 Runtime settings: `CONFIG_FILE` (default `config.json`), `GITHUB_TOKEN`,
 `LISTEN_ADDR` (default `127.0.0.1:8080`), `STATIC_DIR` (default `frontend/dist`),

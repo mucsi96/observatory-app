@@ -21,8 +21,11 @@ pub fn router(snapshots: SnapshotReceiver, static_dir: impl Into<PathBuf>) -> Ro
         .fallback_service(ServeDir::new(static_dir.into()))
         .with_state(snapshots)
         .layer(SetResponseHeaderLayer::overriding(header::CACHE_CONTROL, HeaderValue::from_static("no-store")))
+        // React Aria's press and mobile scroll helpers inject these two static styles.
+        // Permit their exact contents without allowing arbitrary inline styles.
+        // WebKit also needs the exact text-overflow compatibility-probe attribute.
         .layer(SetResponseHeaderLayer::overriding(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static(
-            "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; object-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+            "default-src 'self'; script-src 'self'; style-src 'self' 'sha256-38RhXrc7EdReTKsOm23ZPOCUgniTUUcjky8QOOrQx6o=' 'sha256-gYiS/BvZvRcK27JIXTuwhZ3hs2+VJ1X+2gUlE+farlg='; style-src-attr 'unsafe-hashes' 'sha256-3oFxofzq3N//6J8H86e9ul4WT2OkJrtonB66gn/TLJw='; img-src 'self' data:; object-src 'none'; frame-ancestors 'none'; base-uri 'none'",
         )))
         .layer(SetResponseHeaderLayer::overriding(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff")))
         .layer(SetResponseHeaderLayer::overriding(header::REFERRER_POLICY, HeaderValue::from_static("no-referrer")))
