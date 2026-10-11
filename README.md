@@ -201,17 +201,33 @@ dispatched manually. It uses Node 24 and the latest Renovate release to propose
 grouped Rust, frontend, and container dependency updates in `renovate/all`.
 The dependency dashboard tracks pending updates.
 
-`Pipeline` tests PRs. Main pushes and manual runs publish:
+`Pipeline` tests PRs. On main pushes and manual runs,
+`mucsi96/get-next-version` compares the repository with its last reachable `app-*`
+release tag and supplies the next numbered version. Registry login, image
+publication, and release creation run only when
+`get_next_version.outputs.hasNextVersion == 'true'`. The image uses the suggested
+`get_next_version.outputs.version` directly:
 
 ```text
-ghcr.io/mucsi96/observatory-app:sha-<full commit SHA>
+ghcr.io/mucsi96/observatory-app:<version>
 ```
+
+The first version is `1`, followed by `2`, `3`, and so on. Each successful
+publication creates the action's suggested release tag (`app-1`, `app-2`, …)
+on the exact commit that was built. This records the version for subsequent
+comparisons. Re-running the same released revision skips publication.
 
 Make the GHCR package public after its first publication so Kubernetes can pull it.
 Once the provisioning module sets repository variable `DEPLOY_ENABLED=true`,
 the pipeline also deploys the exact image it built, using Azure OIDC, kubelogin,
 and the existing Twingate service account. Before provisioning, the deploy job is
 skipped so the first image can be published independently.
+
+Automatic deployment runs for newly published versions. A manual main-branch run
+also supports deployment when no new version is suggested: it resolves the last
+reachable `app-*` release and deploys that existing numbered image. This supports
+initial provisioning, retrying a failed rollout, and reloading platform configuration
+without republishing the image.
 
 Terraform supplies repository secrets `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`,
 `AZURE_SUBSCRIPTION_ID`, `AZURE_KEYVAULT_NAME`, and `TWINGATE_SERVICE_KEY`.
@@ -223,9 +239,12 @@ Manual deployment after Azure login and Twingate authentication:
 
 ```bash
 AZURE_KEYVAULT_NAME=p07 \
-DASHBOARD_IMAGE=ghcr.io/mucsi96/observatory-app:sha-<full-commit> \
+DASHBOARD_IMAGE=ghcr.io/mucsi96/observatory-app:<version> \
 bash scripts/deploy.sh
 ```
+
+`scripts/deploy.sh` accepts positive numbered release tags, existing full commit
+SHA tags, and SHA-256 digests. Mutable aliases such as `latest` are rejected.
 
 The script applies `deploy/service.yaml` and `deploy/deployment.yaml`, preserving
 the existing names, namespace, selector, and port. It restarts the workload to
