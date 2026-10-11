@@ -1,0 +1,36 @@
+name: Update dependencies
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '7 0 * * 1'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  update-dependencies:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      statuses: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.99.0'
+      - uses: actions/setup-node@v6
+        with:
+          # Current Renovate releases require Node 24.
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Run Renovate
+        env:
+          LOG_LEVEL: debug
+          RENOVATE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          npm_config_engine_strict: "true"
+        run: npx --yes renovate@latest --platform github "$GITHUB_REPOSITORY"
