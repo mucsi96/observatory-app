@@ -3,8 +3,8 @@ set -euo pipefail
 
 : "${AZURE_KEYVAULT_NAME:?Set the platform Key Vault name}"
 : "${DASHBOARD_IMAGE:?Set the immutable image to deploy}"
-if [[ ! "$DASHBOARD_IMAGE" =~ (:sha-[a-f0-9]{40}|@sha256:[a-f0-9]{64})$ ]]; then
-  printf '%s\n' 'DASHBOARD_IMAGE must use a full commit SHA tag or sha256 digest.' >&2
+if [[ ! "$DASHBOARD_IMAGE" =~ (:[1-9][0-9]*|:sha-[a-f0-9]{40}|@sha256:[a-f0-9]{64})$ ]]; then
+  printf '%s\n' 'DASHBOARD_IMAGE must use a numbered release tag, full commit SHA tag, or sha256 digest.' >&2
   exit 1
 fi
 
