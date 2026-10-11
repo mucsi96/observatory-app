@@ -16,7 +16,7 @@ test('Rust serves the production React bundle under CSP and fleet interactions w
   expect(response?.headers()['content-security-policy']).not.toContain("'unsafe-inline'");
   await expect(page.getByRole('button', { name: 'Hello' })).toBeVisible();
   await expect(page.getByRole('columnheader', { name: 'Frontend / Backend' })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'React / Rust Frontend / Backend' })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'React / Rust', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Hello' }).click();
   await expect(page.getByText('ghcr.io/owner/hello:sha-123')).toBeVisible();
   await expect(page.getByText('Draft', { exact: true })).toBeVisible();

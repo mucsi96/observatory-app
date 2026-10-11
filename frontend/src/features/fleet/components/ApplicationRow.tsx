@@ -3,7 +3,7 @@ import { Minus, Plus } from 'lucide-react';
 import { ExternalLink } from '../../../components/ExternalLink';
 import { StatusBadge } from '../../../components/StatusBadge';
 import type { ApplicationSignals } from '../schema';
-import { hostname, imageVersion, relativeAge } from '../selectors';
+import { imageVersion, relativeAge } from '../selectors';
 import { ApplicationDetails } from './ApplicationDetails';
 import { DependencySignal } from './DependencySignal';
 import styles from './ApplicationRow.module.css';
@@ -48,7 +48,6 @@ export function ApplicationRow({ app, expanded, onToggle, now }: Props) {
                   <Plus size={14} aria-hidden="true" />
                 )}
               </Button>
-              <span className={signalStyles.meta}>{hostname(app.url)}</span>
             </div>
           </div>
         </th>
@@ -56,7 +55,6 @@ export function ApplicationRow({ app, expanded, onToggle, now }: Props) {
           <span>
             {app.stack?.frontend ?? 'Unknown'} / {app.stack?.backend ?? 'Unknown'}
           </span>
-          <span className={signalStyles.meta}>Frontend / Backend</span>
         </td>
         <td>
           <StatusBadge status={app.health} />
