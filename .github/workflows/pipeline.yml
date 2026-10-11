@@ -46,17 +46,31 @@ jobs:
         uses: actions/cache@v6.1.0
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('frontend/node_modules/playwright-core/package.json') }}
-      - name: Install Chromium and Linux dependencies
+          key: playwright-chromium-webkit-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('frontend/node_modules/playwright-core/package.json') }}
+      - name: Install Chromium, WebKit, and Linux dependencies
         if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium webkit
         working-directory: frontend
-      - name: Install Linux dependencies for cached Chromium
+      - name: Install Linux dependencies for cached browsers
         if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: npx playwright install-deps chromium
+        run: npx playwright install-deps chromium webkit
         working-directory: frontend
       - run: npm run test:e2e
         working-directory: frontend
+      - name: Capture dashboard screenshots
+        id: screenshots
+        working-directory: frontend
+        env:
+          SCREENSHOT_WEBKIT: '1'
+        run: npm run screenshots
+      - name: Upload dashboard screenshots
+        if: always() && steps.screenshots.outcome != 'skipped'
+        uses: actions/upload-artifact@v6
+        with:
+          name: dashboard-screenshots
+          path: frontend/test-results/screenshots
+          if-no-files-found: error
+          retention-days: 30
       - run: bash -n scripts/deploy.sh
       - uses: docker/setup-buildx-action@v3
         if: github.event_name == 'pull_request'

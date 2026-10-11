@@ -1,3 +1,4 @@
+import { Badge } from '@mucsi96/react-ui';
 import { statusTone } from '../features/fleet/selectors';
 
 export function StatusBadge({
@@ -7,5 +8,5 @@ export function StatusBadge({
   status: string;
   label?: string;
 }) {
-  return <span className={`badge badge--${statusTone(status)}`}>{label}</span>;
+  return <Badge tone={statusTone(status)}>{label}</Badge>;
 }

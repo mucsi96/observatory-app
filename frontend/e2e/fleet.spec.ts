@@ -13,12 +13,15 @@ test('Rust serves the production React bundle under CSP and fleet interactions w
   await page.route('**/api/apps', (route) => route.fulfill({ json: fleetSnapshot() }));
   const response = await page.goto('/');
   expect(response?.headers()['content-security-policy']).toContain("script-src 'self'");
+  expect(response?.headers()['content-security-policy']).not.toContain("'unsafe-inline'");
   await expect(page.getByRole('button', { name: 'Hello' })).toBeVisible();
   await expect(page.getByRole('columnheader', { name: 'Frontend / Backend' })).toBeVisible();
   await expect(page.getByRole('cell', { name: 'React / Rust Frontend / Backend' })).toBeVisible();
   await page.getByRole('button', { name: 'Hello' }).click();
   await expect(page.getByText('ghcr.io/owner/hello:sha-123')).toBeVisible();
   await expect(page.getByText('Draft', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: /Filter applications/ }).click();
+  await page.getByRole('option', { name: 'All applications', exact: true }).click();
   await page.getByRole('searchbox').fill('language');
   await expect(page.getByRole('button', { name: 'Hello' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Language' })).toBeVisible();
@@ -48,7 +51,15 @@ test('mobile layout remains usable and refresh retains data after an error', asy
   await page.getByRole('button', { name: 'Refresh' }).click();
   await expect(page.getByText(/Showing the last received snapshot/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Hello' })).toBeVisible();
-  await expect(page.getByRole('combobox')).toBeVisible();
+  const filter = page.getByRole('button', { name: /Filter applications/ });
+  await filter.click();
+  const healthy = page.getByRole('option', { name: 'Healthy', exact: true });
+  await expect(healthy).toBeVisible();
+  const bounds = await healthy.boundingBox();
+  expect(bounds!.x).toBeGreaterThanOrEqual(0);
+  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+  await healthy.click();
+  await expect(page.getByRole('button', { name: 'Language', exact: true })).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   );
@@ -109,7 +120,8 @@ test('partial totals, search, filters and expansion state work through the brows
     'aria-expanded',
     'true',
   );
-  await page.getByRole('combobox').selectOption('healthy');
+  await page.getByRole('button', { name: /Filter applications/ }).click();
+  await page.getByRole('option', { name: 'Healthy', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Language', exact: true })).toHaveCount(0);
   await page.getByRole('searchbox').fill('no match');
   await expect(
@@ -126,7 +138,8 @@ test('dependency attention reflects evidence separately from workflow success an
   repo.mrs[0].pipeline = 'passed';
   await page.route('**/api/apps', (route) => route.fulfill({ json: snapshot }));
   await page.goto('/');
-  await page.getByRole('combobox').selectOption('attention');
+  await page.getByRole('button', { name: /Filter applications/ }).click();
+  await page.getByRole('option', { name: 'Needs attention', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Hello', exact: true })).toBeVisible();
   await expect(page.getByText('No PR created by this run')).toBeVisible();
   repo.dependencyUpdate!.outcome = 'pending';
@@ -152,6 +165,38 @@ test('dependency attention reflects evidence separately from workflow success an
   await expect(page.locator('a[href^="javascript:"]')).toHaveCount(0);
   await expect(page.locator('table script')).toHaveCount(0);
   await expect(page.getByText('No PR created by this run')).toHaveCount(0);
+});
+
+test('keyboard filtering and disclosure preserve focus and expansion under CSP', async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message.text());
+  });
+  await page.route('**/api/apps', (route) => route.fulfill({ json: fleetSnapshot() }));
+  await page.goto('/');
+  const hello = page.getByRole('button', { name: 'Hello', exact: true });
+  await hello.focus();
+  await hello.press('Enter');
+  await expect(hello).toHaveAttribute('aria-expanded', 'true');
+  const filter = page.getByRole('button', { name: /Filter applications/ });
+  await filter.focus();
+  await filter.press('Enter');
+  await page.getByRole('option', { name: 'All applications', exact: true }).press('End');
+  await page.getByRole('option', { name: 'Healthy', exact: true }).press('Enter');
+  await expect(filter).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Language', exact: true })).toHaveCount(0);
+  await expect(hello).toHaveAttribute('aria-expanded', 'true');
+  await filter.press('Enter');
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('listbox')).toHaveCount(0);
+  await expect(filter).toBeFocused();
+  await hello.focus();
+  await hello.press('Space');
+  await expect(hello).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('#details-hello')).toHaveCount(0);
+  expect(errors).toEqual([]);
 });
 
 test('initial collection recovers, expired sessions and invalid responses retain the previous snapshot', async ({

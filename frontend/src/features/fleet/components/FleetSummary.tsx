@@ -1,4 +1,6 @@
+import { Card, Text } from '@mucsi96/react-ui';
 import type { Snapshot } from '../schema';
+import styles from './FleetSummary.module.css';
 
 export function FleetSummary({ snapshot }: { snapshot: Snapshot | undefined }) {
   const apps = snapshot?.apps ?? [];
@@ -28,13 +30,15 @@ export function FleetSummary({ snapshot }: { snapshot: Snapshot | undefined }) {
     { label: 'Open issues', value: total('issues'), caption: 'ideas and fixes to explore' },
   ];
   return (
-    <section className="metrics" aria-label="Fleet overview">
+    <section className={styles.metrics} aria-label="Fleet overview">
       {metrics.map((metric) => (
-        <article key={metric.label} aria-label={metric.label}>
-          <span className="metric-label">{metric.label}</span>
-          <strong>{metric.value}</strong>
-          <span>{metric.caption}</span>
-        </article>
+        <Card className={styles.metric} key={metric.label} role="article" aria-label={metric.label}>
+          <Text className={styles.label}>{metric.label}</Text>
+          <strong className={styles.value}>{metric.value}</strong>
+          <Text muted className={styles.caption}>
+            {metric.caption}
+          </Text>
+        </Card>
       ))}
     </section>
   );

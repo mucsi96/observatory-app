@@ -2,6 +2,8 @@ import { ExternalLink } from '../../../components/ExternalLink';
 import { StatusBadge } from '../../../components/StatusBadge';
 import type { DependencyUpdate } from '../schema';
 import { relativeAge } from '../selectors';
+import styles from './DependencySignal.module.css';
+import signalStyles from './Signal.module.css';
 
 export function DependencySignal({
   update,
@@ -10,33 +12,33 @@ export function DependencySignal({
   update: DependencyUpdate | null | undefined;
   now: number;
 }) {
-  if (!update) return <span className="sub">Unavailable</span>;
+  if (!update) return <span className={signalStyles.meta}>Unavailable</span>;
   const { run, mrs, outcome, error } = update;
   return (
-    <div className="signal-stack">
+    <div className={styles.stack}>
       {run ? (
         <>
           <div>
             Workflow: <StatusBadge status={run.status} />{' '}
             <ExternalLink href={run.url}>Run ↗</ExternalLink>
           </div>
-          <span className="sub">{relativeAge(run.updatedAt, now)}</span>
+          <span className={signalStyles.meta}>{relativeAge(run.updatedAt, now)}</span>
           {error || outcome === 'unknown' ? (
-            <span className="sub">PR creation unverified</span>
+            <span className={signalStyles.meta}>PR creation unverified</span>
           ) : outcome === 'pending' ? (
-            <span className="sub">Awaiting run result</span>
+            <span className={signalStyles.meta}>Awaiting run result</span>
           ) : outcome === 'no PR created' ? (
             <StatusBadge status="pending" label="No PR created by this run" />
           ) : (
-            <span className="sub">PRs created by this run:</span>
+            <span className={signalStyles.meta}>PRs created by this run:</span>
           )}
         </>
       ) : (
-        <span className="sub">{error ? 'Unknown' : 'No dependency update runs'}</span>
+        <span className={signalStyles.meta}>{error ? 'Unknown' : 'No dependency update runs'}</span>
       )}
-      {error && <span className="sub">Some dependency signals unavailable</span>}
+      {error && <span className={signalStyles.meta}>Some dependency signals unavailable</span>}
       {mrs.map((pr) => (
-        <span className="sub" key={pr.number}>
+        <span className={signalStyles.meta} key={pr.number}>
           <ExternalLink href={pr.url}>
             #{pr.number} {pr.title}
           </ExternalLink>{' '}

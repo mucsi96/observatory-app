@@ -2,8 +2,9 @@
 
 A production fleet dashboard built with **Rust and React**. The backend uses Axum,
 Tokio, Serde, Reqwest, and kube-rs; the frontend uses React, TypeScript, Vite,
-TanStack Query, and Zod. Entra authentication uses the platform's existing OIDC
-proxy. Assets are served locally, with no external fonts or CDN dependencies.
+TanStack Query, Zod, and [React UI](https://github.com/mucsi96/react-ui). Entra
+authentication uses the platform's existing OIDC proxy. Assets are served locally,
+with no external fonts or CDN dependencies.
 
 Extracted from [p07](https://github.com/mucsi96/p07) with its application history.
 Provisioning lives in [k8s-modules](https://github.com/mucsi96/k8s-modules), module
@@ -49,6 +50,12 @@ binds to `0.0.0.0:8080`.
 - `frontend/src/features/fleet/`: schema-validated server state, React components,
   search/filter/expansion state, and signal selectors. TanStack Query owns polling,
   cancellation, focus refetches, and retention of the last successful snapshot.
+- Shared controls, cards, badges, alerts, and typography use `@mucsi96/react-ui`.
+  Component layout is co-located in CSS Modules and uses the library's public
+  `--bt-*` tokens. `frontend/src/styles.css` contains only document defaults and
+  Observatory's accent tokens; the library stylesheet is imported once in `main.tsx`.
+  [Migration notes and reusable component proposals](docs/react-ui-migration.md)
+  cover the expandable table and strict CSP integration.
 
 Runtime settings: `CONFIG_FILE` (default `config.json`), `GITHUB_TOKEN`,
 `LISTEN_ADDR` (default `127.0.0.1:8080`), `STATIC_DIR` (default `frontend/dist`),
@@ -94,6 +101,28 @@ Setting `OBSERVATORY_CONTAINER_IMAGE` selects the container E2E project, which
 starts the image with a read-only filesystem and all Linux capabilities dropped.
 Playwright waits for HTTP readiness before exercising the real UI and API. CI runs
 this project after building the production image on PRs.
+
+### Screenshot review
+
+The pipeline captures desktop, expanded-row, mobile, filter-menu, and mobile WebKit
+views from the production bundle and uploads them as the `dashboard-screenshots`
+Actions artifact. Captures use illustrative E2E fixture data and are visual-review
+evidence, not live production signals or pixel-diff baselines. Generated images
+are saved in the ignored `frontend/test-results/screenshots/` directory.
+
+After building the frontend and Rust binary, reproduce the captures locally:
+
+```bash
+npm --prefix frontend exec -- playwright install chromium webkit
+SCREENSHOT_WEBKIT=1 npm --prefix frontend run screenshots
+```
+
+Without `SCREENSHOT_WEBKIT=1`, the script captures the four Chromium views. The
+script starts an isolated Rust server, validates mobile overflow and application
+errors, and exercises touch filtering and disclosure in WebKit. Playwright's
+WebKit screenshot helper injects a temporary `body {}` repaint stylesheet that
+the production CSP rejects; this known tooling-only warning is checked separately
+after application verification and does not affect the captured pixels.
 
 ## Signals
 

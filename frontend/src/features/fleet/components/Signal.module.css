@@ -1,0 +1,14 @@
+.meta {
+  display: block;
+  color: var(--bt-text-muted);
+  font-size: 11px;
+  margin-top: 6px;
+  line-height: 1.5;
+}
+
+.version {
+  display: block;
+  font: 11px / 1.7 var(--bt-font-mono);
+  color: var(--bt-text-default);
+  overflow-wrap: anywhere;
+}

@@ -1,10 +1,18 @@
 import { useState } from 'react';
-import { Diamond, RefreshCw, Search } from 'lucide-react';
+import { Alert, Badge, Button, Card, Heading, Select, Text, TextField } from '@mucsi96/react-ui';
+import { Diamond, RefreshCw } from 'lucide-react';
 import { useNow } from '../../hooks/useNow';
 import { useFleetSnapshot } from './api';
 import { filterApplications, relativeAge, type FleetFilter } from './selectors';
-import { ApplicationRow } from './components/ApplicationRow';
+import { FleetTable } from './components/FleetTable';
 import { FleetSummary } from './components/FleetSummary';
+import styles from './FleetDashboard.module.css';
+
+const filters = [
+  { id: 'all', label: 'All applications' },
+  { id: 'attention', label: 'Needs attention' },
+  { id: 'healthy', label: 'Healthy' },
+];
 
 export function FleetDashboard() {
   const { data: snapshot, error, isFetching, refetch } = useFleetSnapshot();
@@ -34,136 +42,99 @@ export function FleetDashboard() {
 
   return (
     <>
-      <header className="topbar">
-        <a className="brand" href="/" aria-label="Observatory home">
-          <Diamond aria-hidden="true" className="brand-mark" size={28} />
-          observatory <span className="brand-divider">/</span>
-          <span className="environment-name">{snapshot?.environment ?? 'connecting'}</span>
+      <header className={styles.topbar}>
+        <a className={styles.brand} href="/" aria-label="Observatory home">
+          <Diamond aria-hidden="true" className={styles.brandMark} size={28} />
+          observatory <span className={styles.brandDivider}>/</span>
+          <span className={styles.environmentName}>{snapshot?.environment ?? 'connecting'}</span>
         </a>
-        <span className="environment">
-          <span className="dot" /> Production
-        </span>
+        <Badge className={styles.environment}>Production</Badge>
       </header>
-      <main>
-        <section className="intro">
+      <main className={styles.main}>
+        <section className={styles.intro}>
           <div>
-            <p className="eyebrow">YOUR APPLICATIONS, AT A GLANCE</p>
-            <h1>
+            <Text className={styles.eyebrow}>YOUR APPLICATIONS, AT A GLANCE</Text>
+            <Heading level={1} className={styles.title}>
               A little clarity.
               <br />
               Across your entire fleet.
-            </h1>
-            <p className="subtitle">
+            </Heading>
+            <Text muted className={styles.subtitle}>
               Health, releases, and work in motion. One quiet place to keep an eye on it all.
-            </p>
+            </Text>
           </div>
-          <div className="sync">
+          <div className={styles.sync}>
             <span role="status">
               {snapshot
                 ? `Updated ${relativeAge(snapshot.updatedAt, now)}`
                 : 'Connecting to your fleet…'}
             </span>
-            <button className="refresh" onClick={() => void refetch()} disabled={isFetching}>
+            <Button variant="outlined" onPress={() => void refetch()} isDisabled={isFetching}>
               <RefreshCw
                 size={15}
                 aria-hidden="true"
-                className={isFetching ? 'spinning' : undefined}
+                className={isFetching ? styles.spinning : undefined}
               />{' '}
               Refresh
-            </button>
+            </Button>
           </div>
         </section>
         {notice && (
-          <div className="notice" role="status">
+          <Alert tone={error ? 'error' : 'warn'} className={styles.notice}>
             {notice}
-          </div>
+          </Alert>
         )}
         <FleetSummary snapshot={snapshot} />
-        <section className="fleet" aria-labelledby="fleet-title">
-          <div className="toolbar">
+        <Card className={styles.fleet} aria-labelledby="fleet-title">
+          <div className={styles.toolbar}>
             <div>
-              <h2 id="fleet-title">
-                Application fleet <span className="visible-count">{apps.length}</span>
-              </h2>
-              <p>Live signals. Real production versions.</p>
+              <Heading level={2} id="fleet-title" className={styles.fleetTitle}>
+                Application fleet <Badge className={styles.visibleCount}>{apps.length}</Badge>
+              </Heading>
+              <Text muted className={styles.fleetSubtitle}>
+                Live signals. Real production versions.
+              </Text>
             </div>
-            <div className="controls">
-              <label className="search">
-                <Search size={16} aria-hidden="true" />
-                <input
-                  type="search"
-                  placeholder="Find an application…"
-                  aria-label="Find an application"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                />
-              </label>
-              <label className="sr-only" htmlFor="fleet-filter">
-                Filter applications
-              </label>
-              <select
-                id="fleet-filter"
+            <div className={styles.controls}>
+              <TextField
+                className={styles.search}
+                type="search"
+                label="Find an application"
+                placeholder="Find an application…"
+                value={search}
+                onChange={setSearch}
+              />
+              <Select
+                className={styles.filter}
+                label="Filter applications"
+                options={filters}
                 value={filter}
-                onChange={(event) => setFilter(event.target.value as FleetFilter)}
-              >
-                <option value="all">All applications</option>
-                <option value="attention">Needs attention</option>
-                <option value="healthy">Healthy</option>
-              </select>
+                onChange={(value) => {
+                  if (filters.some((option) => option.id === value))
+                    setFilter(value as FleetFilter);
+                }}
+              />
             </div>
           </div>
-          <div className="table-wrap">
-            <table>
-              <caption className="sr-only">Production application signals</caption>
-              <thead>
-                <tr>
-                  {[
-                    'Application',
-                    'Frontend / Backend',
-                    'Health',
-                    'Production version',
-                    'Last deployment',
-                    'Dependency update',
-                    'MRs / PRs',
-                    'Issues',
-                  ].map((title) => (
-                    <th scope="col" key={title}>
-                      {title}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {apps.length ? (
-                  apps.map((app) => (
-                    <ApplicationRow
-                      key={app.namespace}
-                      app={app}
-                      expanded={expanded.has(app.namespace)}
-                      onToggle={() => toggle(app.namespace)}
-                      now={now}
-                    />
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={8} className="empty">
-                      {snapshot
-                        ? 'No applications match this view. Try another search or filter.'
-                        : error
-                          ? 'Waiting for live data. Use Refresh to try again.'
-                          : 'Gathering signals from your applications…'}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          <p className="table-note">
+          <FleetTable
+            apps={apps}
+            expanded={expanded}
+            onToggle={toggle}
+            now={now}
+            emptyMessage={
+              snapshot
+                ? 'No applications match this view. Try another search or filter.'
+                : error
+                  ? 'Waiting for live data. Use Refresh to try again.'
+                  : 'Gathering signals from your applications…'
+            }
+          />
+          <Text muted className={styles.tableNote}>
             Health reflects Kubernetes readiness · Versions are deployed container images · Expand
             an app for workload and MR details
-          </p>
-        </section>
-        <footer>
+          </Text>
+        </Card>
+        <footer className={styles.footer}>
           <span>
             <Diamond size={16} aria-hidden="true" /> Built for a clearer view.
           </span>
