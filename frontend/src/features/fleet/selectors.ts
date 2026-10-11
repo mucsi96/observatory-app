@@ -75,11 +75,3 @@ export function imageVersion(image: string) {
   const name = image.slice(image.lastIndexOf('/') + 1);
   return name.includes(':') ? name.slice(name.lastIndexOf(':') + 1) : 'latest (implicit)';
 }
-
-export function hostname(url: string) {
-  try {
-    return new URL(url).hostname;
-  } catch {
-    return 'Address unavailable';
-  }
-}
