@@ -50,6 +50,7 @@ async fn application(
     deadline: Instant,
 ) -> ApplicationSignals {
     let mut result = empty_signals(app);
+    let mut stack = result.application.stack.clone();
     let cluster = async {
         timeout_at(
             deadline,
@@ -62,29 +63,17 @@ async fn application(
         if result.application.repository.is_empty() {
             return None;
         }
-        Some(
-            timeout_at(
-                deadline,
-                github::repository(
-                    github,
-                    &result.application.repository,
-                    &result.application.deployment_workflow,
-                ),
-            )
-            .await
-            .unwrap_or(Err(IntegrationError::Deadline)),
+        let data = timeout_at(
+            deadline,
+            github::repository(
+                github,
+                &result.application.repository,
+                &result.application.deployment_workflow,
+            ),
         )
-    };
-    let (cluster, repository) = tokio::join!(cluster, repository);
-    match cluster {
-        Ok((health, workloads)) => {
-            result.health = health;
-            result.workloads = workloads;
-        }
-        Err(error) => result.errors.push(format!("Kubernetes: {error}")),
-    }
-    if let Some(repository) = repository {
-        match repository {
+        .await
+        .unwrap_or(Err(IntegrationError::Deadline));
+        Some(match data {
             Ok(mut data) => {
                 if let Err(error) = timeout_at(
                     deadline,
@@ -97,9 +86,43 @@ async fn application(
                 .await
                 .unwrap_or(Err(IntegrationError::Deadline))
                 {
-                    let message = format!("Dependency updates: {error}");
-                    data.dependency_update.error = Some(message.clone());
-                    result.errors.push(message);
+                    data.dependency_update.error = Some(format!("Dependency updates: {error}"));
+                }
+                Ok(data)
+            }
+            Err(error) => Err(error),
+        })
+    };
+    let technology = async {
+        if result.application.repository.is_empty()
+            || (stack.frontend.is_some() && stack.backend.is_some())
+        {
+            return Ok(());
+        }
+        timeout_at(
+            deadline,
+            github::stack::collect(github, &result.application.repository, &mut stack),
+        )
+        .await
+        .unwrap_or(Err(IntegrationError::Deadline))
+    };
+    let (cluster, repository, technology) = tokio::join!(cluster, repository, technology);
+    result.application.stack = stack;
+    if let Err(error) = technology {
+        result.errors.push(format!("Technology stack: {error}"));
+    }
+    match cluster {
+        Ok((health, workloads)) => {
+            result.health = health;
+            result.workloads = workloads;
+        }
+        Err(error) => result.errors.push(format!("Kubernetes: {error}")),
+    }
+    if let Some(repository) = repository {
+        match repository {
+            Ok(data) => {
+                if let Some(error) = &data.dependency_update.error {
+                    result.errors.push(error.clone());
                 }
                 result.repository_data = Some(data);
             }

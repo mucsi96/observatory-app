@@ -14,12 +14,14 @@ export interface AppDescriptor {
   repository?: string;
   url: string;
   deploymentWorkflow?: string;
+  stack?: { frontend?: string | null; backend?: string | null };
 }
 
 export interface UpstreamRequest {
   path: string;
   query: URLSearchParams;
   authorization: string | undefined;
+  accept: string | undefined;
   logsUrl: string;
 }
 
@@ -58,6 +60,7 @@ export function defaultGitHub(request: UpstreamRequest): UpstreamResponse {
   if (request.path.endsWith('/pulls')) return { json: [] };
   if (request.path.endsWith('/actions/runs')) return { json: { workflow_runs: [] } };
   if (request.path.endsWith('/actions/workflows')) return { json: { workflows: [] } };
+  if (request.path.endsWith('/git/trees/HEAD')) return { json: { tree: [], truncated: false } };
   return { status: 404, json: { message: 'Unexpected request' } };
 }
 
@@ -208,6 +211,7 @@ async function startObservatory(
         path: url.pathname,
         query: url.searchParams,
         authorization: incoming.headers.authorization,
+        accept: incoming.headers.accept,
         logsUrl,
       };
       requests[kind].push(event);

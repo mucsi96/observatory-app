@@ -1,6 +1,7 @@
 pub mod logs;
+pub mod stack;
 
-use std::{path::Path, time::Duration};
+use std::{path::Path, sync::Arc, time::Duration};
 
 use futures::StreamExt;
 use reqwest::{Client, Response, StatusCode, Url, header};
@@ -22,6 +23,7 @@ pub struct GitHubClient {
     client: Client,
     base_url: String,
     token: String,
+    stack_cache: Arc<stack::ManifestCache>,
 }
 
 pub fn client(
@@ -46,6 +48,7 @@ pub fn client(
         client: builder.build()?,
         base_url: base_url.as_str().trim_end_matches('/').to_owned(),
         token,
+        stack_cache: Arc::default(),
     })
 }
 
@@ -54,6 +57,24 @@ async fn get<T: DeserializeOwned>(
     path: &str,
     query: &[(&str, String)],
 ) -> Result<T, IntegrationError> {
+    let bytes = get_body(
+        github,
+        path,
+        query,
+        "application/vnd.github+json",
+        JSON_LIMIT,
+    )
+    .await?;
+    serde_json::from_slice(&bytes).map_err(|_| IntegrationError::InvalidResponse)
+}
+
+async fn get_body(
+    github: &GitHubClient,
+    path: &str,
+    query: &[(&str, String)],
+    accept: &str,
+    limit: usize,
+) -> Result<Vec<u8>, IntegrationError> {
     if github.token.is_empty() {
         return Err(IntegrationError::MissingGithubToken);
     }
@@ -61,14 +82,13 @@ async fn get<T: DeserializeOwned>(
         .client
         .get(format!("{}{path}", github.base_url))
         .bearer_auth(&github.token)
-        .header(header::ACCEPT, "application/vnd.github+json")
+        .header(header::ACCEPT, accept)
         .header("X-GitHub-Api-Version", "2022-11-28")
         .query(query)
         .send()
         .await
         .map_err(|_| IntegrationError::Unavailable)?;
-    let bytes = bounded_body(response, JSON_LIMIT).await?;
-    serde_json::from_slice(&bytes).map_err(|_| IntegrationError::InvalidResponse)
+    bounded_body(response, limit).await
 }
 
 pub async fn repository(

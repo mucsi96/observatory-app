@@ -54,7 +54,9 @@ export function filterApplications(apps: ApplicationSignals[], query: string, fi
   const search = query.toLocaleLowerCase().trim();
   return apps.filter(
     (app) =>
-      `${app.name} ${app.namespace} ${app.repository}`.toLocaleLowerCase().includes(search) &&
+      `${app.name} ${app.namespace} ${app.repository} ${app.stack?.frontend ?? ''} ${app.stack?.backend ?? ''}`
+        .toLocaleLowerCase()
+        .includes(search) &&
       (filter === 'all' || (filter === 'healthy' ? app.health === 'healthy' : needsAttention(app))),
   );
 }

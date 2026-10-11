@@ -11,6 +11,14 @@ pub struct Application {
     pub url: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub deployment_workflow: String,
+    #[serde(default)]
+    pub stack: TechnologyStack,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct TechnologyStack {
+    pub frontend: Option<String>,
+    pub backend: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]

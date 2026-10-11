@@ -285,6 +285,10 @@ tbody th {
 .app-row:hover {
   background: #1e2635;
 }
+.technology-stack {
+  min-width: 150px;
+  overflow-wrap: anywhere;
+}
 .app-name {
   display: flex;
   gap: 12px;
