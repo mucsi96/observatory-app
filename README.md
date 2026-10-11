@@ -107,6 +107,10 @@ this project after building the production image on PRs.
   detection. Unknown components are shown as **Unknown**, and collection failures
   remain visible without hiding health or repository signals. Detection reads up
   to 12 package manifests (256 KiB each), and rejects truncated repository trees.
+  Successful manifest evidence is cached by repository and blob SHA in a bounded
+  512-entry in-memory cache shared across collection cycles and concurrent apps.
+  Repository trees are still refreshed each cycle, so changed manifests are
+  collected immediately; failed or cancelled manifest reads are retried.
   These labels describe repository technologies, not the deployed image version.
   Search also matches stack labels. Optional app inventory overrides take
   precedence and can supply either or both components, including apps without a

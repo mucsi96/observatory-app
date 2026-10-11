@@ -424,6 +424,75 @@ test('inventory stack overrides work without a repository and preserve partial a
   expect(app.requests.github.some((event) => event.path.includes('/repos/o/manual/'))).toBe(false);
 });
 
+test('manifest caching spans collection cycles, picks up changed blobs, and retries failed reads', async ({
+  observatory,
+  request,
+}) => {
+  const reactSha = 'a'.repeat(40);
+  const backendSha = 'b'.repeat(40);
+  const angularSha = 'c'.repeat(40);
+  const retrySha = 'd'.repeat(40);
+  let changed = false;
+  const app = await observatory({
+    apps: [
+      descriptor('cached', 'o/cached'),
+      descriptor('retry', 'o/retry'),
+      descriptor('shared', 'o/cached'),
+    ],
+    github: (event) => {
+      if (event.path.endsWith('/git/trees/HEAD')) {
+        return {
+          json: {
+            truncated: false,
+            tree: event.path.includes('/o/retry/')
+              ? [{ path: 'frontend/package.json', type: 'blob', sha: retrySha }]
+              : [
+                  {
+                    path: 'frontend/package.json',
+                    type: 'blob',
+                    sha: changed ? angularSha : reactSha,
+                  },
+                  { path: 'backend/package.json', type: 'blob', sha: backendSha },
+                  { path: 'backend/worker/package.json', type: 'blob', sha: backendSha },
+                ],
+          },
+        };
+      }
+      if (event.path.endsWith(`/git/blobs/${reactSha}`))
+        return { json: { dependencies: { react: '^19' } } };
+      if (event.path.endsWith(`/git/blobs/${backendSha}`))
+        return { json: { dependencies: { express: '^5' } } };
+      if (event.path.endsWith(`/git/blobs/${angularSha}`))
+        return { json: { dependencies: { '@angular/core': '^22' } } };
+      if (event.path.endsWith(`/git/blobs/${retrySha}`))
+        return changed ? { json: { dependencies: { vue: '^3' } } } : { status: 403 };
+      return defaultGitHub(event);
+    },
+  });
+  const first = await app.snapshot();
+  expect(first.apps[0].stack).toEqual({ frontend: 'React', backend: 'Node.js' });
+  expect(first.apps[1].errors).toEqual(['Technology stack: upstream HTTP 403']);
+  changed = true;
+  await expect
+    .poll(async () => (await request.get(`${app.url}/api/apps`)).json(), {
+      timeout: 75_000,
+      intervals: [1000],
+    })
+    .toMatchObject({
+      apps: [
+        { stack: { frontend: 'Angular', backend: 'Node.js' }, errors: [] },
+        { stack: { frontend: 'Vue', backend: null }, errors: [] },
+        { stack: { frontend: 'Angular', backend: 'Node.js' }, errors: [] },
+      ],
+    });
+  const blobCalls = (sha: string) =>
+    app.requests.github.filter((event) => event.path.endsWith(`/git/blobs/${sha}`)).length;
+  expect(blobCalls(reactSha)).toBe(1);
+  expect(blobCalls(backendSha)).toBe(1);
+  expect(blobCalls(angularSha)).toBe(1);
+  expect(blobCalls(retrySha)).toBe(2);
+});
+
 test('stack collection errors keep detected components, health, and dependency signals visible', async ({
   observatory,
   page,

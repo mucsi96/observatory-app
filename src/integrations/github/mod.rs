@@ -1,7 +1,7 @@
 pub mod logs;
 pub mod stack;
 
-use std::{path::Path, time::Duration};
+use std::{path::Path, sync::Arc, time::Duration};
 
 use futures::StreamExt;
 use reqwest::{Client, Response, StatusCode, Url, header};
@@ -23,6 +23,7 @@ pub struct GitHubClient {
     client: Client,
     base_url: String,
     token: String,
+    stack_cache: Arc<stack::ManifestCache>,
 }
 
 pub fn client(
@@ -47,6 +48,7 @@ pub fn client(
         client: builder.build()?,
         base_url: base_url.as_str().trim_end_matches('/').to_owned(),
         token,
+        stack_cache: Arc::default(),
     })
 }
 

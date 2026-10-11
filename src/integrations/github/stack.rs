@@ -1,12 +1,30 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet, VecDeque},
+    sync::Arc,
+};
 
 use serde::Deserialize;
+use tokio::sync::{Mutex, OnceCell};
 
 use super::{GitHubClient, get, get_body};
 use crate::{error::IntegrationError, model::TechnologyStack};
 
 const MANIFEST_LIMIT: usize = 256 * 1024;
 const PACKAGE_LIMIT: usize = 12;
+const CACHE_LIMIT: usize = 512;
+
+type ManifestEntry = ((String, String), Arc<OnceCell<PackageStack>>);
+
+#[derive(Default)]
+pub(super) struct ManifestCache {
+    entries: Mutex<VecDeque<ManifestEntry>>,
+}
+
+#[derive(Clone)]
+struct PackageStack {
+    frontend: BTreeSet<&'static str>,
+    node_backend: bool,
+}
 
 // Inventory labels take precedence. Mutating the result keeps any detected
 // backend evidence when a package manifest request fails or times out.
@@ -78,28 +96,9 @@ pub async fn collect(
         match package(github, repository, &file.sha).await {
             Ok(package) => {
                 if detect_frontend {
-                    for (dependency, framework) in [
-                        ("@angular/core", "Angular"),
-                        ("react", "React"),
-                        ("vue", "Vue"),
-                        ("svelte", "Svelte"),
-                        ("@solidjs/router", "Solid"),
-                        ("solid-js", "Solid"),
-                        ("preact", "Preact"),
-                    ] {
-                        if package.dependencies.contains_key(dependency)
-                            || package.dev_dependencies.contains_key(dependency)
-                        {
-                            frontend.insert(framework);
-                        }
-                    }
+                    frontend.extend(package.frontend);
                 }
-                if detect_backend
-                    && backend_file(&file.path)
-                    && ["express", "fastify", "koa", "@nestjs/core", "hono"]
-                        .iter()
-                        .any(|dependency| package.dependencies.contains_key(*dependency))
-                {
+                if detect_backend && backend_file(&file.path) && package.node_backend {
                     backend.insert("Node.js");
                 }
                 publish(result, &frontend, &backend, detect_frontend, detect_backend);
@@ -116,19 +115,67 @@ async fn package(
     github: &GitHubClient,
     repository: &str,
     sha: &str,
-) -> Result<Package, IntegrationError> {
+) -> Result<PackageStack, IntegrationError> {
     if !matches!(sha.len(), 40 | 64) || !sha.bytes().all(|byte| byte.is_ascii_hexdigit()) {
         return Err(IntegrationError::InvalidResponse);
     }
-    let bytes = get_body(
-        github,
-        &format!("/repos/{repository}/git/blobs/{sha}"),
-        &[],
-        "application/vnd.github.raw+json",
-        MANIFEST_LIMIT,
-    )
-    .await?;
-    serde_json::from_slice(&bytes).map_err(|_| IntegrationError::InvalidResponse)
+    let cell = {
+        let key = (repository.to_owned(), sha.to_owned());
+        let mut entries = github.stack_cache.entries.lock().await;
+        let cell = if let Some(index) = entries.iter().position(|(entry, _)| entry == &key) {
+            entries.remove(index).unwrap().1
+        } else {
+            if entries.len() == CACHE_LIMIT {
+                entries.pop_front();
+            }
+            Arc::new(OnceCell::new())
+        };
+        entries.push_back((key, Arc::clone(&cell)));
+        cell
+    };
+    // Only successful evidence is cached. OnceCell also shares in-flight reads,
+    // and allows retry after an upstream failure or collection cancellation.
+    cell.get_or_try_init(|| async {
+        let bytes = get_body(
+            github,
+            &format!("/repos/{repository}/git/blobs/{sha}"),
+            &[],
+            "application/vnd.github.raw+json",
+            MANIFEST_LIMIT,
+        )
+        .await?;
+        let package: Package =
+            serde_json::from_slice(&bytes).map_err(|_| IntegrationError::InvalidResponse)?;
+        Ok(package_stack(package))
+    })
+    .await
+    .cloned()
+}
+
+fn package_stack(package: Package) -> PackageStack {
+    let frontend = [
+        ("@angular/core", "Angular"),
+        ("react", "React"),
+        ("vue", "Vue"),
+        ("svelte", "Svelte"),
+        ("@solidjs/router", "Solid"),
+        ("solid-js", "Solid"),
+        ("preact", "Preact"),
+    ]
+    .into_iter()
+    .filter_map(|(dependency, framework)| {
+        (package.dependencies.contains_key(dependency)
+            || package.dev_dependencies.contains_key(dependency))
+        .then_some(framework)
+    })
+    .collect();
+    let node_backend = ["express", "fastify", "koa", "@nestjs/core", "hono"]
+        .iter()
+        .any(|dependency| package.dependencies.contains_key(*dependency));
+    PackageStack {
+        frontend,
+        node_backend,
+    }
 }
 
 fn publish(
