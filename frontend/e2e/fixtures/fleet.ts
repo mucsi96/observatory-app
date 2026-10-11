@@ -1,4 +1,4 @@
-import type { Snapshot } from '../features/fleet/schema';
+import type { Snapshot } from '../../src/features/fleet/schema';
 
 export function fleetSnapshot(): Snapshot {
   return {

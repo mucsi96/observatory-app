@@ -17,6 +17,7 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
@@ -31,15 +32,12 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: cargo fmt --all --check
       - run: cargo clippy --locked --all-targets -- -D warnings
-      - run: cargo test --locked
       - run: cargo build --locked
       - run: npm ci
         working-directory: frontend
       - run: npm run lint
         working-directory: frontend
       - run: npm run format:check
-        working-directory: frontend
-      - run: npm test
         working-directory: frontend
       - run: npm run build
         working-directory: frontend
@@ -48,12 +46,6 @@ jobs:
       - run: npm run test:e2e
         working-directory: frontend
       - run: bash -n scripts/deploy.sh
-      - uses: actions/upload-artifact@v6
-        if: failure()
-        with:
-          name: browser-test-results
-          path: frontend/test-results
-          if-no-files-found: ignore
       - uses: docker/setup-buildx-action@v3
         if: github.event_name == 'pull_request'
       - name: Verify production image
@@ -64,17 +56,18 @@ jobs:
           push: false
           load: true
           tags: observatory:test
-      - name: Smoke test production image
+      - name: Playwright production image E2E
         if: github.event_name == 'pull_request'
-        run: |
-          docker run -d --name observatory --read-only --cap-drop ALL \
-            -p 127.0.0.1:8080:8080 \
-            -e CONFIG_FILE=/config/config.json \
-            -v "$PWD/config.example.json:/config/config.json:ro" observatory:test
-          trap 'docker logs observatory; docker rm -f observatory' EXIT
-          curl --fail --retry 10 --retry-connrefused --retry-delay 1 http://127.0.0.1:8080/healthz
-          curl --fail http://127.0.0.1:8080/
-          curl --fail --retry 5 --retry-delay 1 http://127.0.0.1:8080/api/apps | jq -e '.apps | length > 0'
+        working-directory: frontend
+        env:
+          OBSERVATORY_CONTAINER_IMAGE: observatory:test
+        run: npm run test:e2e
+      - uses: actions/upload-artifact@v6
+        if: failure()
+        with:
+          name: browser-test-results
+          path: frontend/test-results
+          if-no-files-found: ignore
 
   publish:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'

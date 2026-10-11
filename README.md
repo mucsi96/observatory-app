@@ -33,13 +33,19 @@ binds to `0.0.0.0:8080`.
 - `src/model.rs`, `src/config.rs`: typed API models and validated JSON inventory.
   The existing `config.json`/ConfigMap shape and camelCase API remain compatible.
 - `src/integrations/`: typed Kubernetes deployments and GitHub REST collectors.
-  kube-rs uses only in-cluster credentials, including projected token rotation;
-  local kubeconfig is never used. TLS and error handling keep secrets server-side.
+  kube-rs defaults to in-cluster credentials and handles projected token rotation;
+  local kubeconfig is never used. Explicit HTTPS endpoint/CA/token-file settings
+  support configured environments and isolated end-to-end testing. TLS and error
+  handling keep secrets server-side.
 - `src/collector.rs`: bounded async collection, independent per-app signals, and
   an immutable snapshot shared through a Tokio watch channel. There is no database
   or persistent application state to migrate.
 - `src/web.rs`, `src/main.rs`: Axum routes, static assets, security headers,
   structured tracing (`RUST_LOG`), and SIGINT/SIGTERM shutdown.
+- Rust modules use free functions with explicit inputs and typed data. Workload
+  readiness and dependency evidence are pure transformations; HTTP collection and
+  snapshot publication form the async I/O boundary. React uses function components
+  and hooks.
 - `frontend/src/features/fleet/`: schema-validated server state, React components,
   search/filter/expansion state, and signal selectors. TanStack Query owns polling,
   cancellation, focus refetches, and retention of the last successful snapshot.
@@ -49,31 +55,45 @@ Runtime settings: `CONFIG_FILE` (default `config.json`), `GITHUB_TOKEN`,
 and `RUST_LOG`. Production retains the existing ConfigMap, Secret, service account,
 Service, namespace, ports, and ingress/OIDC policy.
 
+Optional server-side upstream settings are `GITHUB_API_URL` (default
+`https://api.github.com`), `GITHUB_CA_FILE`, `KUBERNETES_API_URL`,
+`KUBERNETES_CA_FILE`, and `KUBERNETES_TOKEN_FILE`. Explicit upstream endpoints must
+use HTTPS. Kubernetes defaults to the in-cluster service account; when an endpoint
+is configured, CA/token paths default to the same service-account directory.
+
 ### Verification
 
 ```bash
 cargo fmt --all --check
 cargo clippy --locked --all-targets -- -D warnings
-cargo test --locked
 cargo build --locked
 npm --prefix frontend ci
 npm --prefix frontend run lint
 npm --prefix frontend run format:check
-npm --prefix frontend test
 npm --prefix frontend run build
 npm --prefix frontend exec -- playwright install chromium
 npm --prefix frontend run test:e2e
 bash -n scripts/deploy.sh
 docker build -t observatory:local .
+OBSERVATORY_CONTAINER_IMAGE=observatory:local npm --prefix frontend run test:e2e
 ```
 
-Rust tests exercise collector deadlines, readiness, pagination, partial failures,
-API contracts, credential redaction, and run-specific dependency evidence. React
-tests exercise filtering, expansion, partial totals, safe links, stale data, and
-refresh recovery. Playwright starts the real Rust server and loads the production
-bundle, checking CSP, interaction, and mobile layout. It requires the frontend
-build and `target/debug/observatory`; stop other servers using port 8080 first.
-CI additionally builds and smoke-tests the read-only production container on PRs.
+**All behavioral tests live in `frontend/e2e/` and run through Playwright.** The
+`ui` project loads the production React bundle from the real Rust server and checks
+filtering, expansion, partial totals, safe links, stale data, refresh recovery, CSP,
+and mobile layout. The `collectors` project launches real Rust processes against
+isolated HTTPS GitHub/Kubernetes/log-storage fixtures and checks readiness,
+pagination, partial failures, credential isolation, dependency creation evidence,
+and the actual 50-second collection deadline. There are no separate unit or
+component test suites.
+
+E2E requires OpenSSL, Chromium, the frontend build, and `target/debug/observatory`.
+Stop other servers using port 8080 first. `npm --prefix frontend test` runs the same
+Playwright suite; `npm --prefix frontend run test:watch` opens Playwright's UI.
+Setting `OBSERVATORY_CONTAINER_IMAGE` selects the container E2E project, which
+starts the image with a read-only filesystem and all Linux capabilities dropped.
+Playwright waits for HTTP readiness before exercising the real UI and API. CI runs
+this project after building the production image on PRs.
 
 ## Signals
 

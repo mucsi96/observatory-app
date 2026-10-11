@@ -54,15 +54,13 @@ pub struct ApplicationSignals {
     pub errors: Vec<String>,
 }
 
-impl ApplicationSignals {
-    pub fn new(application: Application) -> Self {
-        Self {
-            application,
-            health: Health::Unknown,
-            workloads: Vec::new(),
-            repository_data: None,
-            errors: Vec::new(),
-        }
+pub fn empty_signals(application: Application) -> ApplicationSignals {
+    ApplicationSignals {
+        application,
+        health: Health::Unknown,
+        workloads: Vec::new(),
+        repository_data: None,
+        errors: Vec::new(),
     }
 }
 

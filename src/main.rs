@@ -1,10 +1,9 @@
-use std::{env, future::IntoFuture, time::Duration};
+use std::{env, future::IntoFuture, path::Path, time::Duration};
 
 use anyhow::Context;
 use observatory::{
-    collector::Collector,
-    config::Config,
-    integrations::{github::GitHub, kubernetes::Kubernetes},
+    collector, config,
+    integrations::{github, kubernetes},
     web,
 };
 use tokio::{net::TcpListener, sync::watch};
@@ -20,12 +19,21 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
     let config =
-        Config::load(env::var("CONFIG_FILE").unwrap_or_else(|_| "config.json".into())).await?;
-    let collector = Collector::new(
-        config,
-        Kubernetes::in_cluster()?,
-        GitHub::new(env::var("GITHUB_TOKEN").unwrap_or_default())?,
-    );
+        config::load(env::var("CONFIG_FILE").unwrap_or_else(|_| "config.json".into())).await?;
+    let kube_url = env::var("KUBERNETES_API_URL").ok();
+    let kube_ca = env::var("KUBERNETES_CA_FILE").ok();
+    let kube_token = env::var("KUBERNETES_TOKEN_FILE").ok();
+    let kube = kubernetes::client(
+        kube_url.as_deref(),
+        kube_ca.as_deref().map(Path::new),
+        kube_token.as_deref().map(Path::new),
+    )?;
+    let github_ca = env::var("GITHUB_CA_FILE").ok();
+    let github = github::client(
+        &env::var("GITHUB_API_URL").unwrap_or_else(|_| "https://api.github.com".into()),
+        env::var("GITHUB_TOKEN").unwrap_or_default(),
+        github_ca.as_deref().map(Path::new),
+    )?;
     let addr = env::var("LISTEN_ADDR").unwrap_or_else(|_| "127.0.0.1:8080".into());
     let addr = if addr.starts_with(':') {
         format!("0.0.0.0{addr}")
@@ -44,7 +52,7 @@ async fn main() -> anyhow::Result<()> {
     );
     let (sender, snapshots) = watch::channel(None);
     let stop = CancellationToken::new();
-    let collection = tokio::spawn(collector.run(sender, stop.clone()));
+    let collection = tokio::spawn(collector::run(config, kube, github, sender, stop.clone()));
     let shutdown_token = stop.clone();
     let signals = tokio::spawn(async move {
         shutdown_signal().await;

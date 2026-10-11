@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{path::Path, time::Duration};
 
 use k8s_openapi::api::apps::v1::Deployment;
 use kube::{Api, Client, Config, api::ListParams};
@@ -8,62 +8,74 @@ use crate::{
     model::{Health, Workload, WorkloadStatus},
 };
 
-#[derive(Clone)]
-pub struct Kubernetes {
-    client: Option<Client>,
+pub fn client(
+    endpoint: Option<&str>,
+    ca_file: Option<&Path>,
+    token_file: Option<&Path>,
+) -> anyhow::Result<Option<Client>> {
+    // Local development must not accidentally query the user's kubeconfig.
+    let mut config = if let Some(endpoint) = endpoint {
+        let url = crate::config::https_endpoint(endpoint)?;
+        let mut config = Config::new(url.as_str().parse()?);
+        config.root_cert_file = Some(
+            ca_file
+                .unwrap_or(Path::new(
+                    "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt",
+                ))
+                .to_owned(),
+        );
+        config.auth_info.token_file = Some(
+            token_file
+                .unwrap_or(Path::new(
+                    "/var/run/secrets/kubernetes.io/serviceaccount/token",
+                ))
+                .to_string_lossy()
+                .into_owned(),
+        );
+        config
+    } else {
+        if !Path::new("/var/run/secrets/kubernetes.io/serviceaccount/ca.crt").exists() {
+            return Ok(None);
+        }
+        Config::incluster()?
+    };
+    config.connect_timeout = Some(Duration::from_secs(10));
+    config.read_timeout = Some(Duration::from_secs(10));
+    Ok(Some(Client::try_from(config)?))
 }
 
-impl Kubernetes {
-    pub fn in_cluster() -> anyhow::Result<Self> {
-        // Local development must not accidentally query the user's kubeconfig.
-        if !std::path::Path::new("/var/run/secrets/kubernetes.io/serviceaccount/ca.crt").exists() {
-            return Ok(Self { client: None });
+pub async fn collect(
+    client: &Option<Client>,
+    namespace: &str,
+) -> Result<(Health, Vec<Workload>), IntegrationError> {
+    let client = client.clone().ok_or(IntegrationError::NotInCluster)?;
+    let deployments: Api<Deployment> = Api::namespaced(client, namespace);
+    let mut workloads = Vec::new();
+    let mut params = ListParams::default().limit(100);
+    loop {
+        let page = deployments.list(&params).await?;
+        workloads.extend(page.items.into_iter().map(workload));
+        match page.metadata.continue_.filter(|token| !token.is_empty()) {
+            Some(token) => params = params.continue_token(&token),
+            None => break,
         }
-        let mut config = Config::incluster()?;
-        config.connect_timeout = Some(Duration::from_secs(10));
-        config.read_timeout = Some(Duration::from_secs(10));
-        Ok(Self {
-            client: Some(Client::try_from(config)?),
-        })
     }
-
-    pub fn new(client: Option<Client>) -> Self {
-        Self { client }
-    }
-
-    pub async fn collect(
-        &self,
-        namespace: &str,
-    ) -> Result<(Health, Vec<Workload>), IntegrationError> {
-        let client = self.client.clone().ok_or(IntegrationError::NotInCluster)?;
-        let deployments: Api<Deployment> = Api::namespaced(client, namespace);
-        let mut workloads = Vec::new();
-        let mut params = ListParams::default().limit(100);
-        loop {
-            let page = deployments.list(&params).await?;
-            workloads.extend(page.items.into_iter().map(workload));
-            match page.metadata.continue_.filter(|token| !token.is_empty()) {
-                Some(token) => params = params.continue_token(&token),
-                None => break,
-            }
-        }
-        let health = if workloads.is_empty() {
-            Health::NotDeployed
-        } else if workloads
-            .iter()
-            .any(|w| w.status == WorkloadStatus::Unhealthy)
-        {
-            Health::Unhealthy
-        } else if workloads
-            .iter()
-            .any(|w| w.status != WorkloadStatus::Healthy)
-        {
-            Health::Degraded
-        } else {
-            Health::Healthy
-        };
-        Ok((health, workloads))
-    }
+    let health = if workloads.is_empty() {
+        Health::NotDeployed
+    } else if workloads
+        .iter()
+        .any(|w| w.status == WorkloadStatus::Unhealthy)
+    {
+        Health::Unhealthy
+    } else if workloads
+        .iter()
+        .any(|w| w.status != WorkloadStatus::Healthy)
+    {
+        Health::Degraded
+    } else {
+        Health::Healthy
+    };
+    Ok((health, workloads))
 }
 
 pub fn workload(deployment: Deployment) -> Workload {
