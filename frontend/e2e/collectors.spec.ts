@@ -243,6 +243,64 @@ test('paginated PRs and checks combine with legacy statuses and only the deliver
   );
 });
 
+for (const workflow of ['deploy.production.yml', 'deploy.production.yaml']) {
+  test(`dotted deployment workflow ${workflow} starts and selects its deployment`, async ({
+    observatory,
+    page,
+  }) => {
+    const deploymentUrl = 'https://github.com/o/r/actions/runs/1';
+    const updatedAt = '2026-10-01T10:00:00Z';
+    const app = await observatory({
+      apps: [{ ...descriptor(), deploymentWorkflow: workflow }],
+      github: (event) => {
+        if (event.path === '/repos/o/r/actions/runs') {
+          return {
+            json: {
+              workflow_runs: [
+                { id: 3, path: '.github/workflows/pipeline.yml' },
+                { id: 2, path: '.github/workflows/pages.yml' },
+                { id: 1, path: `.github/workflows/${workflow}`, updated_at: updatedAt },
+              ],
+            },
+          };
+        }
+        if (event.path === '/repos/o/r/actions/runs/1/jobs') {
+          return {
+            json: {
+              jobs: [
+                {
+                  name: 'deploy',
+                  status: 'completed',
+                  conclusion: 'success',
+                  html_url: deploymentUrl,
+                },
+              ],
+            },
+          };
+        }
+        return defaultGitHub(event);
+      },
+    });
+    const signal = (await app.snapshot()).apps[0];
+    expect(signal.errors).toEqual([]);
+    expect(signal.repositoryData?.deployment).toEqual({
+      status: 'success',
+      url: deploymentUrl,
+      updatedAt,
+    });
+    expect(
+      app.requests.github
+        .filter((event) => event.path.endsWith('/jobs'))
+        .map((event) => event.path),
+    ).toEqual(['/repos/o/r/actions/runs/1/jobs']);
+    await page.goto(app.url);
+    await expect(page.getByRole('link', { name: 'success', exact: true })).toHaveAttribute(
+      'href',
+      deploymentUrl,
+    );
+  });
+}
+
 for (const [name, state, count, checks, expected] of [
   ['no checks', 'pending', 0, [], 'no checks'],
   ['running', 'success', 1, [{ status: 'in_progress' }], 'running'],
@@ -319,6 +377,8 @@ test('invalid application descriptors are rejected at process startup', async ({
     [{ ...descriptor(), namespace: '../app' }],
     [{ ...descriptor(), repository: '../o/r' }],
     [{ ...descriptor(), deploymentWorkflow: '../pipeline.yml' }],
+    [{ ...descriptor(), deploymentWorkflow: 'nested/deploy.production.yml' }],
+    [{ ...descriptor(), deploymentWorkflow: '..\\deploy.production.yml' }],
     [descriptor(), descriptor()],
   ]) {
     await expect(observatory({ apps })).rejects.toThrow('invalid app configuration');

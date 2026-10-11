@@ -26,7 +26,7 @@ pub fn validate(config: &Config) -> anyhow::Result<()> {
     static REPOSITORY: LazyLock<Regex> =
         LazyLock::new(|| Regex::new(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$").unwrap());
     static WORKFLOW: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r"^[A-Za-z0-9_-]+\.ya?ml$").unwrap());
+        LazyLock::new(|| Regex::new(r"^[A-Za-z0-9_.-]+\.ya?ml$").unwrap());
 
     if config.environment.trim().is_empty() || config.apps.is_empty() {
         bail!("environment and apps are required");
