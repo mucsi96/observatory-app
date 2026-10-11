@@ -102,6 +102,28 @@ starts the image with a read-only filesystem and all Linux capabilities dropped.
 Playwright waits for HTTP readiness before exercising the real UI and API. CI runs
 this project after building the production image on PRs.
 
+### Screenshot review
+
+The pipeline captures desktop, expanded-row, mobile, filter-menu, and mobile WebKit
+views from the production bundle and uploads them as the `dashboard-screenshots`
+Actions artifact. Captures use illustrative E2E fixture data and are visual-review
+evidence, not live production signals or pixel-diff baselines. Generated images
+are saved in the ignored `frontend/test-results/screenshots/` directory.
+
+After building the frontend and Rust binary, reproduce the captures locally:
+
+```bash
+npm --prefix frontend exec -- playwright install chromium webkit
+SCREENSHOT_WEBKIT=1 npm --prefix frontend run screenshots
+```
+
+Without `SCREENSHOT_WEBKIT=1`, the script captures the four Chromium views. The
+script starts an isolated Rust server, validates mobile overflow and application
+errors, and exercises touch filtering and disclosure in WebKit. Playwright's
+WebKit screenshot helper injects a temporary `body {}` repaint stylesheet that
+the production CSP rejects; this known tooling-only warning is checked separately
+after application verification and does not affect the captured pixels.
+
 ## Signals
 
 - **Frontend / Backend:** stack labels such as **Angular / Java** or **React / Rust**,

@@ -7,7 +7,7 @@ import { chromium, webkit, devices } from 'playwright';
 import { fleetSnapshot } from '../e2e/fixtures/fleet.ts';
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
-const output = `${root}/docs/screenshots`;
+const output = fileURLToPath(new URL('../test-results/screenshots', import.meta.url));
 const socket = createServer();
 await new Promise((resolve) => socket.listen(0, '127.0.0.1', resolve));
 const port = socket.address().port;
