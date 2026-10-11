@@ -144,6 +144,11 @@ proxy and an ingress NetworkPolicy. The app has no standalone authentication.
 
 ## Independent build and deployment
 
+The `Update dependencies` workflow runs Renovate every Monday and can also be
+dispatched manually. It uses Node 24 and the latest Renovate release to propose
+grouped Rust, frontend, and container dependency updates in `renovate/all`.
+The dependency dashboard tracks pending updates.
+
 `Pipeline` tests PRs. Main pushes and manual runs publish:
 
 ```text
