@@ -1,0 +1,168 @@
+import { expect, test } from '@playwright/test';
+import { fleetSnapshot } from './fixtures/fleet';
+
+test('Rust serves the production React bundle under CSP and fleet interactions work', async ({
+  page,
+  request,
+}) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message.text());
+  });
+  await page.route('**/api/apps', (route) => route.fulfill({ json: fleetSnapshot() }));
+  const response = await page.goto('/');
+  expect(response?.headers()['content-security-policy']).toContain("script-src 'self'");
+  await expect(page.getByRole('button', { name: 'Hello' })).toBeVisible();
+  await page.getByRole('button', { name: 'Hello' }).click();
+  await expect(page.getByText('ghcr.io/owner/hello:sha-123')).toBeVisible();
+  await expect(page.getByText('Draft', { exact: true })).toBeVisible();
+  await page.getByRole('searchbox').fill('language');
+  await expect(page.getByRole('button', { name: 'Hello' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Language' })).toBeVisible();
+  const health = await request.get('/healthz');
+  expect(await health.text()).toBe('ok');
+  const snapshot = await request.get('/api/apps');
+  expect(snapshot.status()).toBe(200);
+  expect(snapshot.headers()['cache-control']).toBe('no-store');
+  expect((await snapshot.json()).apps[0].health).toBe('unknown');
+  expect(errors).toEqual([]);
+});
+
+test('mobile layout remains usable and refresh retains data after an error', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  let failing = false;
+  await page.route('**/api/apps', (route) =>
+    route.fulfill(
+      failing
+        ? { status: 503, json: { error: 'Initial collection in progress' } }
+        : { json: fleetSnapshot() },
+    ),
+  );
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'Hello' })).toBeVisible();
+  failing = true;
+  await page.getByRole('button', { name: 'Refresh' }).click();
+  await expect(page.getByText(/Showing the last received snapshot/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Hello' })).toBeVisible();
+  await expect(page.getByRole('combobox')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  );
+});
+
+test('partial totals, search, filters and expansion state work through the browser', async ({
+  page,
+}) => {
+  await page.route('**/api/apps', (route) => route.fulfill({ json: fleetSnapshot() }));
+  await page.goto('/');
+  await expect(page.getByRole('article', { name: 'Open issues' })).toContainText('3+');
+  await expect(page.getByRole('article', { name: 'Open MRs / PRs' })).toContainText('1+');
+  await page.getByRole('button', { name: 'Hello', exact: true }).click();
+  await expect(page.getByText('Draft', { exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: '#12 Improve greeting' })).toHaveAttribute(
+    'href',
+    'https://github.com/owner/hello/pull/12',
+  );
+  await page.getByRole('searchbox').fill('language');
+  await expect(page.getByRole('button', { name: 'Hello', exact: true })).toHaveCount(0);
+  await page.getByRole('searchbox').clear();
+  await expect(page.getByRole('button', { name: 'Hello', exact: true })).toHaveAttribute(
+    'aria-expanded',
+    'true',
+  );
+  await page.getByRole('combobox').selectOption('healthy');
+  await expect(page.getByRole('button', { name: 'Language', exact: true })).toHaveCount(0);
+  await page.getByRole('searchbox').fill('no match');
+  await expect(
+    page.getByText('No applications match this view. Try another search or filter.'),
+  ).toBeVisible();
+});
+
+test('dependency attention reflects evidence separately from workflow success and escapes untrusted links', async ({
+  page,
+}) => {
+  const snapshot = fleetSnapshot();
+  snapshot.apps = [snapshot.apps[0]];
+  const repo = snapshot.apps[0].repositoryData!;
+  repo.mrs[0].pipeline = 'passed';
+  await page.route('**/api/apps', (route) => route.fulfill({ json: snapshot }));
+  await page.goto('/');
+  await page.getByRole('combobox').selectOption('attention');
+  await expect(page.getByRole('button', { name: 'Hello', exact: true })).toBeVisible();
+  await expect(page.getByText('No PR created by this run')).toBeVisible();
+  repo.dependencyUpdate!.outcome = 'pending';
+  repo.dependencyUpdate!.run!.status = 'in_progress';
+  await page.getByRole('button', { name: 'Refresh' }).click();
+  await expect(page.getByRole('button', { name: 'Hello', exact: true })).toHaveCount(0);
+  repo.dependencyUpdate = {
+    run: { status: 'success', url: 'javascript:alert(1)', updatedAt: new Date().toISOString() },
+    outcome: 'unknown',
+    error: 'Dependency updates: upstream HTTP 410',
+    mrs: [
+      {
+        number: 42,
+        title: '<script>alert("x")</script>',
+        url: 'javascript:alert(1)',
+        state: 'merged',
+      },
+    ],
+  };
+  await page.getByRole('button', { name: 'Refresh' }).click();
+  await expect(page.getByText('PR creation unverified')).toBeVisible();
+  await expect(page.getByText('#42 <script>alert("x")</script>', { exact: true })).toBeVisible();
+  await expect(page.locator('a[href^="javascript:"]')).toHaveCount(0);
+  await expect(page.locator('table script')).toHaveCount(0);
+  await expect(page.getByText('No PR created by this run')).toHaveCount(0);
+});
+
+test('initial collection recovers, expired sessions and invalid responses retain the previous snapshot', async ({
+  page,
+}) => {
+  let mode: 'initial' | 'live' | 'session' | 'invalid' = 'initial';
+  await page.route('**/api/apps', (route) =>
+    route.fulfill(
+      mode === 'initial'
+        ? { status: 503, json: { error: 'Initial collection in progress' } }
+        : mode === 'live'
+          ? { json: fleetSnapshot() }
+          : mode === 'session'
+            ? { contentType: 'text/html', body: '<html>Sign in</html>' }
+            : { json: { apps: [] } },
+    ),
+  );
+  await page.goto('/');
+  await expect(
+    page.getByText('Initial collection is still in progress. Retrying shortly…'),
+  ).toBeVisible();
+  mode = 'live';
+  await page.getByRole('button', { name: 'Refresh' }).click();
+  await expect(page.getByRole('button', { name: 'Hello', exact: true })).toBeVisible();
+  mode = 'session';
+  await page.getByRole('button', { name: 'Refresh' }).click();
+  await expect(page.getByText(/sign in again.*Showing the last received snapshot/)).toBeVisible();
+  mode = 'invalid';
+  await page.getByRole('button', { name: 'Refresh' }).click();
+  await expect(
+    page.getByText(/invalid snapshot.*Showing the last received snapshot/),
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Hello', exact: true })).toBeVisible();
+});
+
+test('stale snapshots remain visible and production versions handle registry ports and digests', async ({
+  page,
+}) => {
+  const snapshot = fleetSnapshot();
+  snapshot.updatedAt = new Date(Date.now() - 240_000).toISOString();
+  snapshot.apps[0].workloads[0].images = [
+    'registry:5000/team/app:v2',
+    'registry:5000/team/app',
+    'app@sha256:0123456789abcdef',
+  ];
+  await page.route('**/api/apps', (route) => route.fulfill({ json: snapshot }));
+  await page.goto('/');
+  await expect(page.getByText(/Signals are stale/)).toBeVisible();
+  await expect(page.getByText('v2', { exact: true })).toBeVisible();
+  await expect(page.getByText('latest (implicit)', { exact: true })).toBeVisible();
+  await expect(page.getByText('sha256:0123456789ab', { exact: true })).toBeVisible();
+});

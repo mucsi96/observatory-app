@@ -1,4 +1,10 @@
 /observatory
+/target/
+/frontend/node_modules/
+/frontend/dist/
+/frontend/coverage/
+/frontend/test-results/
+/frontend/playwright-report/
 /config.json
 /.kube/
 /.env

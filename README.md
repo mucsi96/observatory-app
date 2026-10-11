@@ -1,8 +1,9 @@
 # Observatory
 
-A clean production fleet dashboard: Go standard library backend, embedded HTML/CSS,
-and vanilla JavaScript. No npm packages, Go dependencies, database, external fonts,
-or CDN assets. Entra authentication uses the platform's existing OIDC proxy.
+A production fleet dashboard built with **Rust and React**. The backend uses Axum,
+Tokio, Serde, Reqwest, and kube-rs; the frontend uses React, TypeScript, Vite,
+TanStack Query, and Zod. Entra authentication uses the platform's existing OIDC
+proxy. Assets are served locally, with no external fonts or CDN dependencies.
 
 Extracted from [p07](https://github.com/mucsi96/p07) with its application history.
 Provisioning lives in [k8s-modules](https://github.com/mucsi96/k8s-modules), module
@@ -10,21 +11,89 @@ Provisioning lives in [k8s-modules](https://github.com/mucsi96/k8s-modules), mod
 
 ## Development
 
-Requires Go 1.24+ (CI uses 1.26). Node 18+ is needed only for JS syntax and UI tests.
+Requires Rust 1.99 (pinned in `rust-toolchain.toml`) and Node.js 24+.
+Install Rust with [rustup](https://rustup.rs/). From the repository root:
 
 ```bash
-CONFIG_FILE=config.example.json go run .
-go test -race ./...
-go vet ./...
-node --check web/app.js
-node --test scripts/app.test.cjs
-bash -n scripts/deploy.sh
+npm --prefix frontend ci
+npm --prefix frontend run build
+CONFIG_FILE=config.example.json cargo run --locked
 ```
 
 Open http://localhost:8080. Set `GITHUB_TOKEN` to read real repository data. Without
 in-cluster credentials Kubernetes signals are explicitly **unknown**. The example
-contains placeholder URLs, not demo data. The local server binds to loopback;
-the container uses `LISTEN_ADDR=:8080` and runs as a non-root static binary.
+contains placeholder URLs, not demo data. The local server binds to loopback.
+For frontend hot reload, run `npm --prefix frontend run dev` in a second terminal
+and open http://localhost:5173; Vite proxies API requests to the Rust server.
+The production container runs as a non-root process in a distroless image and
+binds to `0.0.0.0:8080`.
+
+### Architecture
+
+- `src/model.rs`, `src/config.rs`: typed API models and validated JSON inventory.
+  The existing `config.json`/ConfigMap shape and camelCase API remain compatible.
+- `src/integrations/`: typed Kubernetes deployments and GitHub REST collectors.
+  kube-rs defaults to in-cluster credentials and handles projected token rotation;
+  local kubeconfig is never used. Explicit HTTPS endpoint/CA/token-file settings
+  support configured environments and isolated end-to-end testing. TLS and error
+  handling keep secrets server-side.
+- `src/collector.rs`: bounded async collection, independent per-app signals, and
+  an immutable snapshot shared through a Tokio watch channel. There is no database
+  or persistent application state to migrate.
+- `src/web.rs`, `src/main.rs`: Axum routes, static assets, security headers,
+  structured tracing (`RUST_LOG`), and SIGINT/SIGTERM shutdown.
+- Rust modules use free functions with explicit inputs and typed data. Workload
+  readiness and dependency evidence are pure transformations; HTTP collection and
+  snapshot publication form the async I/O boundary. React uses function components
+  and hooks.
+- `frontend/src/features/fleet/`: schema-validated server state, React components,
+  search/filter/expansion state, and signal selectors. TanStack Query owns polling,
+  cancellation, focus refetches, and retention of the last successful snapshot.
+
+Runtime settings: `CONFIG_FILE` (default `config.json`), `GITHUB_TOKEN`,
+`LISTEN_ADDR` (default `127.0.0.1:8080`), `STATIC_DIR` (default `frontend/dist`),
+and `RUST_LOG`. Production retains the existing ConfigMap, Secret, service account,
+Service, namespace, ports, and ingress/OIDC policy.
+
+Optional server-side upstream settings are `GITHUB_API_URL` (default
+`https://api.github.com`), `GITHUB_CA_FILE`, `KUBERNETES_API_URL`,
+`KUBERNETES_CA_FILE`, and `KUBERNETES_TOKEN_FILE`. Explicit upstream endpoints must
+use HTTPS. Kubernetes defaults to the in-cluster service account; when an endpoint
+is configured, CA/token paths default to the same service-account directory.
+
+### Verification
+
+```bash
+cargo fmt --all --check
+cargo clippy --locked --all-targets -- -D warnings
+cargo build --locked
+npm --prefix frontend ci
+npm --prefix frontend run lint
+npm --prefix frontend run format:check
+npm --prefix frontend run build
+npm --prefix frontend exec -- playwright install chromium
+npm --prefix frontend run test:e2e
+bash -n scripts/deploy.sh
+docker build -t observatory:local .
+OBSERVATORY_CONTAINER_IMAGE=observatory:local npm --prefix frontend run test:e2e
+```
+
+**All behavioral tests live in `frontend/e2e/` and run through Playwright.** The
+`ui` project loads the production React bundle from the real Rust server and checks
+filtering, expansion, partial totals, safe links, stale data, refresh recovery, CSP,
+and mobile layout. The `collectors` project launches real Rust processes against
+isolated HTTPS GitHub/Kubernetes/log-storage fixtures and checks readiness,
+pagination, partial failures, credential isolation, dependency creation evidence,
+and the actual 50-second collection deadline. There are no separate unit or
+component test suites.
+
+E2E requires OpenSSL, Chromium, the frontend build, and `target/debug/observatory`.
+Stop other servers using port 8080 first. `npm --prefix frontend test` runs the same
+Playwright suite; `npm --prefix frontend run test:watch` opens Playwright's UI.
+Setting `OBSERVATORY_CONTAINER_IMAGE` selects the container E2E project, which
+starts the image with a read-only filesystem and all Linux capabilities dropped.
+Playwright waits for HTTP readiness before exercising the real UI and API. CI runs
+this project after building the production image on PRs.
 
 ## Signals
 
