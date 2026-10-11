@@ -41,7 +41,19 @@ jobs:
         working-directory: frontend
       - run: npm run build
         working-directory: frontend
-      - run: npx playwright install --with-deps chromium
+      - name: Restore Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('frontend/node_modules/playwright-core/package.json') }}
+      - name: Install Chromium and Linux dependencies
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - name: Install Linux dependencies for cached Chromium
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
         working-directory: frontend
       - run: npm run test:e2e
         working-directory: frontend
