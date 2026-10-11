@@ -45,6 +45,10 @@ pub fn validate(config: &Config) -> anyhow::Result<()> {
             || !namespaces.insert(&app.namespace)
             || (!app.repository.is_empty() && !REPOSITORY.is_match(&app.repository))
             || (!app.deployment_workflow.is_empty() && !WORKFLOW.is_match(&app.deployment_workflow))
+            || [&app.stack.frontend, &app.stack.backend]
+                .into_iter()
+                .flatten()
+                .any(|label| label.trim().is_empty() || label.len() > 120)
             || !valid_url
         {
             bail!("invalid app configuration: {:?}", app.name);

@@ -10,6 +10,7 @@ export function fleetSnapshot(): Snapshot {
         namespace: 'hello',
         repository: 'owner/hello',
         url: 'https://hello.example.com',
+        stack: { frontend: 'React', backend: 'Rust' },
         health: 'healthy',
         errors: [],
         workloads: [

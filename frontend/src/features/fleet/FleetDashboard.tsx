@@ -119,6 +119,7 @@ export function FleetDashboard() {
                 <tr>
                   {[
                     'Application',
+                    'Frontend / Backend',
                     'Health',
                     'Production version',
                     'Last deployment',
@@ -145,7 +146,7 @@ export function FleetDashboard() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={7} className="empty">
+                    <td colSpan={8} className="empty">
                       {snapshot
                         ? 'No applications match this view. Try another search or filter.'
                         : error

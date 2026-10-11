@@ -14,6 +14,8 @@ test('Rust serves the production React bundle under CSP and fleet interactions w
   const response = await page.goto('/');
   expect(response?.headers()['content-security-policy']).toContain("script-src 'self'");
   await expect(page.getByRole('button', { name: 'Hello' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'Frontend / Backend' })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'React / Rust Frontend / Backend' })).toBeVisible();
   await page.getByRole('button', { name: 'Hello' }).click();
   await expect(page.getByText('ghcr.io/owner/hello:sha-123')).toBeVisible();
   await expect(page.getByText('Draft', { exact: true })).toBeVisible();
@@ -41,6 +43,7 @@ test('mobile layout remains usable and refresh retains data after an error', asy
   );
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'Hello' })).toBeVisible();
+  await expect(page.getByText('React / Rust', { exact: true })).toBeVisible();
   failing = true;
   await page.getByRole('button', { name: 'Refresh' }).click();
   await expect(page.getByText(/Showing the last received snapshot/)).toBeVisible();
@@ -48,6 +51,41 @@ test('mobile layout remains usable and refresh retains data after an error', asy
   await expect(page.getByRole('combobox')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
+  );
+});
+
+test('stack labels are searchable and missing or partial metadata stays explicit', async ({
+  page,
+}) => {
+  const snapshot = fleetSnapshot();
+  snapshot.apps.push({
+    ...snapshot.apps[0],
+    name: 'Legacy',
+    namespace: 'legacy',
+    stack: { frontend: 'Angular', backend: 'Java' },
+  });
+  await page.route('**/api/apps', (route) => route.fulfill({ json: snapshot }));
+  await page.goto('/');
+  await expect(page.getByText('Angular / Java', { exact: true })).toBeVisible();
+  await expect(page.getByText('Unknown / Unknown', { exact: true })).toBeVisible();
+  for (const query of [' react ', 'RUST']) {
+    await page.getByRole('searchbox').fill(query);
+    await expect(page.getByRole('button', { name: 'Hello', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Legacy', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Language', exact: true })).toHaveCount(0);
+  }
+  await page.getByRole('searchbox').fill('java');
+  await expect(page.getByRole('button', { name: 'Legacy', exact: true })).toBeVisible();
+  await page.getByRole('searchbox').clear();
+  snapshot.apps[1].stack = { frontend: null, backend: 'Go' };
+  await page.getByRole('button', { name: 'Refresh' }).click();
+  await expect(page.getByText('Unknown / Go', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Legacy', exact: true }).click();
+  await expect(page.locator('#details-legacy > td')).toHaveAttribute('colspan', '8');
+  await page.getByRole('searchbox').fill('no match');
+  await expect(page.getByRole('cell', { name: /No applications match/ })).toHaveAttribute(
+    'colspan',
+    '8',
   );
 });
 

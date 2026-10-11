@@ -48,6 +48,12 @@ export function ApplicationRow({ app, expanded, onToggle, now }: Props) {
             </div>
           </div>
         </th>
+        <td className="technology-stack">
+          <span>
+            {app.stack?.frontend ?? 'Unknown'} / {app.stack?.backend ?? 'Unknown'}
+          </span>
+          <span className="sub">Frontend / Backend</span>
+        </td>
         <td>
           <StatusBadge status={app.health} />
         </td>

@@ -345,6 +345,180 @@ test('incomplete issue searches are unknown and do not hide Kubernetes health', 
   expect(signal.errors).toContain('GitHub: GitHub search results incomplete');
 });
 
+test('repository manifests supply Angular / Java and React / Rust through the real API and UI', async ({
+  observatory,
+  page,
+}) => {
+  const packageSha = 'a'.repeat(40);
+  const ignoredSha = 'b'.repeat(40);
+  const app = await observatory({
+    apps: [descriptor('angular', 'o/angular'), descriptor('react', 'o/react')],
+    github: (event) => {
+      const angular = event.path.includes('/o/angular/');
+      if (event.path.endsWith('/git/trees/HEAD')) {
+        return {
+          json: {
+            truncated: false,
+            tree: [
+              { path: 'frontend/package.json', type: 'blob', sha: packageSha },
+              { path: angular ? 'server/pom.xml' : 'Cargo.toml', type: 'blob' },
+              { path: 'frontend/Cargo.toml', type: 'blob' },
+              { path: 'docs/server/go.mod', type: 'blob' },
+              { path: 'scripts/requirements.txt', type: 'blob' },
+              { path: 'tests/fixtures/package.json', type: 'blob', sha: ignoredSha },
+              { path: 'examples/server/Gemfile', type: 'blob' },
+            ],
+          },
+        };
+      }
+      if (event.path.endsWith(`/git/blobs/${packageSha}`)) {
+        return { json: { dependencies: angular ? { '@angular/core': '^22' } : { react: '^19' } } };
+      }
+      return defaultGitHub(event);
+    },
+  });
+  const snapshot = await app.snapshot();
+  expect(snapshot.apps.map((signal) => signal.stack)).toEqual([
+    { frontend: 'Angular', backend: 'Java' },
+    { frontend: 'React', backend: 'Rust' },
+  ]);
+  expect(snapshot.apps.every((signal) => signal.errors.length === 0)).toBe(true);
+  expect(app.requests.github.filter((event) => event.path.includes('/git/blobs/'))).toHaveLength(2);
+  expect(
+    app.requests.github
+      .filter((event) => event.path.includes('/git/blobs/'))
+      .every((event) => event.accept === 'application/vnd.github.raw+json'),
+  ).toBe(true);
+  expect(
+    app.requests.github
+      .filter((event) => event.path.endsWith('/git/trees/HEAD'))
+      .every((event) => event.query.get('recursive') === '1'),
+  ).toBe(true);
+  await page.goto(app.url);
+  await expect(page.getByText('Angular / Java', { exact: true })).toBeVisible();
+  await expect(page.getByText('React / Rust', { exact: true })).toBeVisible();
+});
+
+test('inventory stack overrides work without a repository and preserve partial automatic detection', async ({
+  observatory,
+}) => {
+  const app = await observatory({
+    apps: [
+      { ...descriptor('manual', ''), stack: { frontend: 'Angular', backend: 'Java' } },
+      { ...descriptor('override', 'o/override'), stack: { frontend: 'React', backend: 'Rust' } },
+      { ...descriptor('partial', 'o/partial'), stack: { frontend: 'Vue' } },
+    ],
+    github: (event) =>
+      event.path.endsWith('/git/trees/HEAD')
+        ? { json: { truncated: false, tree: [{ path: 'server/go.mod', type: 'blob' }] } }
+        : defaultGitHub(event),
+  });
+  const snapshot = await app.snapshot();
+  expect(snapshot.apps.map((signal) => signal.stack)).toEqual([
+    { frontend: 'Angular', backend: 'Java' },
+    { frontend: 'React', backend: 'Rust' },
+    { frontend: 'Vue', backend: 'Go' },
+  ]);
+  expect(snapshot.apps.every((signal) => signal.errors.length === 0)).toBe(true);
+  expect(app.requests.github.filter((event) => event.path.includes('/git/'))).toHaveLength(1);
+  expect(app.requests.github.some((event) => event.path.includes('/repos/o/manual/'))).toBe(false);
+});
+
+test('stack collection errors keep detected components, health, and dependency signals visible', async ({
+  observatory,
+  page,
+}) => {
+  const handler = dependencyHandler({ logs: created + finished });
+  const packageSha = 'a'.repeat(40);
+  let release!: () => void;
+  const dependencyCollected = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const app = await observatory({
+    github: async (event) => {
+      if (event.path.endsWith('/git/trees/HEAD'))
+        return {
+          json: {
+            truncated: false,
+            tree: [
+              { path: 'Cargo.toml', type: 'blob' },
+              { path: 'frontend/package.json', type: 'blob', sha: packageSha },
+            ],
+          },
+        };
+      if (event.path.endsWith(`/git/blobs/${packageSha}`)) {
+        // Dependency collection must progress while stack collection is waiting.
+        await dependencyCollected;
+        return { status: 403 };
+      }
+      if (event.path === '/repos/o/r/pulls/42') release();
+      return handler(event);
+    },
+  });
+  const signal = (await app.snapshot()).apps[0];
+  expect(signal.stack).toEqual({ frontend: null, backend: 'Rust' });
+  expect(signal.health).toBe('healthy');
+  expect(signal.repositoryData?.issues).toBe(3);
+  expect(signal.repositoryData?.dependencyUpdate?.outcome).toBe('PR created');
+  expect(signal.errors).toEqual(['Technology stack: upstream HTTP 403']);
+  await page.goto(app.url);
+  await expect(page.getByText('Unknown / Rust', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'app', exact: true }).click();
+  await expect(
+    page.getByText('Technology stack: upstream HTTP 403', { exact: true }),
+  ).toBeVisible();
+});
+
+for (const [name, tree, blob, expected] of [
+  [
+    'truncated trees',
+    { truncated: true, tree: [{ path: 'Cargo.toml', type: 'blob' }] },
+    {},
+    'GitHub repository tree incomplete',
+  ],
+  [
+    'too many manifests',
+    {
+      truncated: false,
+      tree: Array.from({ length: 13 }, (_, index) => ({
+        path: `packages/app-${index}/package.json`,
+        type: 'blob',
+        sha: 'a'.repeat(40),
+      })),
+    },
+    {},
+    'too many package manifests',
+  ],
+  [
+    'oversized manifests',
+    { truncated: false, tree: [{ path: 'package.json', type: 'blob', sha: 'a'.repeat(40) }] },
+    { body: 'x'.repeat(256 * 1024 + 1) },
+    'upstream response too large',
+  ],
+  [
+    'invalid manifests',
+    { truncated: false, tree: [{ path: 'package.json', type: 'blob', sha: 'a'.repeat(40) }] },
+    { body: '{invalid json' },
+    'upstream response invalid',
+  ],
+] as const) {
+  test(`stack detection reports ${name} without hiding other signals`, async ({ observatory }) => {
+    const app = await observatory({
+      github: (event) =>
+        event.path.endsWith('/git/trees/HEAD')
+          ? { json: tree }
+          : event.path.includes('/git/blobs/')
+            ? blob
+            : defaultGitHub(event),
+    });
+    const signal = (await app.snapshot()).apps[0];
+    expect(signal.stack).toEqual({ frontend: null, backend: null });
+    expect(signal.health).toBe('healthy');
+    expect(signal.repositoryData?.issues).toBe(3);
+    expect(signal.errors.join()).toContain(expected);
+  });
+}
+
 test('all Kubernetes deployment pages contribute to health and image signals', async ({
   observatory,
 }) => {
@@ -379,6 +553,8 @@ test('invalid application descriptors are rejected at process startup', async ({
     [{ ...descriptor(), deploymentWorkflow: '../pipeline.yml' }],
     [{ ...descriptor(), deploymentWorkflow: 'nested/deploy.production.yml' }],
     [{ ...descriptor(), deploymentWorkflow: '..\\deploy.production.yml' }],
+    [{ ...descriptor(), stack: { frontend: ' ' } }],
+    [{ ...descriptor(), stack: { backend: 'x'.repeat(121) } }],
     [descriptor(), descriptor()],
   ]) {
     await expect(observatory({ apps })).rejects.toThrow('invalid app configuration');

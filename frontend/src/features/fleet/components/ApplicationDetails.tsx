@@ -5,7 +5,7 @@ import type { ApplicationSignals } from '../schema';
 export function ApplicationDetails({ app }: { app: ApplicationSignals }) {
   return (
     <tr className="details" id={`details-${app.namespace}`}>
-      <td colSpan={7}>
+      <td colSpan={8}>
         <div className="detail-links">
           <ExternalLink href={app.url}>Open application ↗</ExternalLink>
           {app.repository && (

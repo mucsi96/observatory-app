@@ -17,6 +17,10 @@ pub enum IntegrationError {
     MissingGithubToken,
     #[error("GitHub search results incomplete")]
     IncompleteSearch,
+    #[error("GitHub repository tree incomplete")]
+    IncompleteTree,
+    #[error("too many package manifests for stack detection")]
+    TooManyManifests,
     #[error("not connected (run in cluster)")]
     NotInCluster,
     #[error("dependency run identity unavailable")]
