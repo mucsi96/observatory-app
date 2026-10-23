@@ -18,14 +18,14 @@ Install Rust with [rustup](https://rustup.rs/). From the repository root:
 ```bash
 npm --prefix frontend ci
 npm --prefix frontend run build
-CONFIG_FILE=config.example.json cargo run --locked
+cargo build --locked
+node frontend/scripts/test-gateway.mjs
 ```
 
 Open http://localhost:8080. Set `GITHUB_TOKEN` to read real repository data. Without
 in-cluster credentials Kubernetes signals are explicitly **unknown**. The example
 contains placeholder URLs, not demo data. The local server binds to loopback.
-For frontend hot reload, run `npm --prefix frontend run dev` in a second terminal
-and open http://localhost:5173; Vite proxies API requests to the Rust server.
+The local gateway supplies inline public config and ephemeral test JWTs.
 The production container runs as a non-root process in a distroless image and
 binds to `0.0.0.0:8080`.
 
@@ -41,7 +41,7 @@ binds to `0.0.0.0:8080`.
 - `src/collector.rs`: bounded async collection, independent per-app signals, and
   an immutable snapshot shared through a Tokio watch channel. There is no database
   or persistent application state to migrate.
-- `src/web.rs`, `src/main.rs`: Axum routes, static assets, security headers,
+- `src/web.rs`, `src/main.rs`, `src/auth.rs`: authenticated Axum API routes,
   structured tracing (`RUST_LOG`), and SIGINT/SIGTERM shutdown.
 - Rust modules use free functions with explicit inputs and typed data. Workload
   readiness and dependency evidence are pure transformations; HTTP collection and
@@ -57,10 +57,15 @@ binds to `0.0.0.0:8080`.
   [Migration notes and reusable component proposals](docs/react-ui-migration.md)
   cover the expandable table and strict CSP integration.
 
-Runtime settings: `CONFIG_FILE` (default `config.json`), `GITHUB_TOKEN`,
-`LISTEN_ADDR` (default `127.0.0.1:8080`), `STATIC_DIR` (default `frontend/dist`),
-and `RUST_LOG`. Production retains the existing ConfigMap, Secret, service account,
-Service, namespace, ports, and ingress/OIDC policy.
+Runtime settings: `CONFIG_FILE` (default `config.json`), `GITHUB_TOKEN` or
+`GITHUB_TOKEN_FILE`, `LISTEN_ADDR` (default `127.0.0.1:8080`), and `RUST_LOG`.
+`OIDC_ISSUER` and `API_CLIENT_ID` are required. The API validates RS256 signatures,
+issuer, audience, expiry, `api-access` scope and `readApps` role.
+The separate nginx client uses inline `window.__APP_CONFIG__` injected by the
+client chart, with same-origin Faro telemetry at `/_telemetry/collect`.
+The chart authenticates document requests and owns nested SPA routing; nginx
+serves real files and rewrites only `/` for probes. Deployment computes the CSP
+hash for the exact inline config script, retaining the strict script policy.
 
 Optional server-side upstream settings are `GITHUB_API_URL` (default
 `https://api.github.com`), `GITHUB_CA_FILE`, `KUBERNETES_API_URL`,
@@ -82,11 +87,12 @@ npm --prefix frontend exec -- playwright install chromium
 npm --prefix frontend run test:e2e
 bash -n scripts/deploy.sh
 docker build -t observatory:local .
-OBSERVATORY_CONTAINER_IMAGE=observatory:local npm --prefix frontend run test:e2e
+docker build -t observatory-client:local frontend
+OBSERVATORY_CONTAINER_IMAGE=observatory:local OBSERVATORY_CLIENT_IMAGE=observatory-client:local npm --prefix frontend run test:e2e
 ```
 
 **All behavioral tests live in `frontend/e2e/` and run through Playwright.** The
-`ui` project loads the production React bundle from the real Rust server and checks
+`ui` project loads the production React bundle through the local gateway and checks
 filtering, expansion, partial totals, safe links, stale data, refresh recovery, CSP,
 and mobile layout. The `collectors` project launches real Rust processes against
 isolated HTTPS GitHub/Kubernetes/log-storage fixtures and checks readiness,
@@ -191,8 +197,9 @@ upstream calls. Snapshots older than three minutes are stale. Kubernetes and Git
 errors are independent per app. Credentials are never returned to the browser.
 
 `GET /healthz` checks the server; `GET /api/apps` returns the latest snapshot (503
-until initial collection completes). Production access is protected by the OIDC
-proxy and an ingress NetworkPolicy. The app has no standalone authentication.
+until initial collection completes). Production access uses per-app oauth2-proxy
+ForwardAuth, host-only `__Host-session` cookies, ingress NetworkPolicy and backend
+JWT validation. The read-only API exposes no mutation endpoints.
 
 ## Independent build and deployment
 
@@ -204,7 +211,8 @@ The dependency dashboard tracks pending updates.
 `Pipeline` tests PRs. Main pushes and manual runs publish:
 
 ```text
-ghcr.io/mucsi96/observatory-app:sha-<full commit SHA>
+ghcr.io/mucsi96/observatory-app-server:<number>
+ghcr.io/mucsi96/observatory-app-client:<number>
 ```
 
 Make the GHCR package public after its first publication so Kubernetes can pull it.
@@ -215,35 +223,38 @@ skipped so the first image can be published independently.
 
 Terraform supplies repository secrets `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`,
 `AZURE_SUBSCRIPTION_ID`, `AZURE_KEYVAULT_NAME`, and `TWINGATE_SERVICE_KEY`.
-The deploy identity reads only the platform vault's `k8s-oidc-config` secret and
-can manage application Deployments/Services in the `observatory` namespace.
+The deploy identity reads scoped secrets in the dedicated application vault:
+`k8s-config`, `hostname`, `api-client-id`, `forward-auth-config`, and
+`client-runtime-config`. It manages Helm application resources and Middleware
+in the `observatory` namespace.
 Runtime GitHub credentials stay in the platform-managed Kubernetes Secret.
 
 Manual deployment after Azure login and Twingate authentication:
 
 ```bash
-AZURE_KEYVAULT_NAME=p07 \
-DASHBOARD_IMAGE=ghcr.io/mucsi96/observatory-app:sha-<full-commit> \
+AZURE_KEYVAULT_NAME=p07-observatory \
+SERVER_IMAGE=ghcr.io/mucsi96/observatory-app-server:1 \
+CLIENT_IMAGE=ghcr.io/mucsi96/observatory-app-client:1 \
 bash scripts/deploy.sh
 ```
 
-The script applies `deploy/service.yaml` and `deploy/deployment.yaml`, preserving
-the existing names, namespace, selector, and port. It restarts the workload to
-reload configuration/credentials and waits for readiness. After platform inventory
-or token changes, rerun the pipeline or `kubectl -n observatory rollout restart
-deployment/observatory` to reload them.
+The script resolves published `rust-app` (minimum 2.0.0) and `client-app`
+(minimum 24.0.0) chart versions and passes them explicitly to Helm. The backend
+release remains `observatory`; `--take-ownership` adopts its existing resources.
+The client release is `observatory-client`. Inventory is copied from the platform
+ConfigMap into the chart config Secret; rerun deployment after inventory changes.
+The workload identity account is `observatory-api-workload-identity`.
 
 ## Handoff from p07
 
-1. Publish this repository's first image and make its package public.
-2. Apply the updated `setup_app_dashboard` module in p07 (Terraform 1.7+). Its
-   `removed` blocks forget the old Terraform Deployment and Service **without
-   deleting either**, and provision this repository's deploy identity and secrets.
-3. Run `Pipeline` manually on main. The app adopts the existing resources with
-   `kubectl apply` and rolls out the standalone image. The URL stays
-   **https://apps.<dns-zone>**; OIDC, routing and runtime access rules retain their
-   existing Terraform addresses.
+1. Release the supporting `setup_app_dashboard` module changes and pin that
+   published reference in p07. Provision the app proxy, dedicated vault,
+   workload identity, deployment RBAC and same-origin telemetry route with an
+   explicitly approved Terraform apply.
+2. Publish both numbered images and make their GHCR packages public.
+3. Deploy the application charts. The URL remains **https://apps.<dns-zone>**.
+   The API retains the inventory and GitHub secret; no database/storage migration
+   is involved. Provisioning v-93 alone does not supply the new app vault contract.
 
-The running image from p07 remains active until this handoff is applied and the
-first standalone deployment succeeds. On fresh environments, provision the module
-first, then run this pipeline to install the workload.
+Component releases use `get-next-version`, publish only changed sources, and
+forward the selected exact versions to deployment, including unchanged components.
