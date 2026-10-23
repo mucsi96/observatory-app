@@ -38,13 +38,15 @@ jq -n --arg image "$SERVER_IMAGE" --arg host "$HOSTNAME" --arg clientId "$API_CL
   --arg issuer "$OIDC_ISSUER" --argjson auth "$PROXY_AUTH" --slurpfile inventory "$work/inventory.json" '{
   image:$image,host:$host,basePath:"/api",clientId:$clientId,auth:$auth,
   serviceAccountName:"observatory-api-workload-identity",serviceAccount:{create:true,automountServiceAccountToken:true},
-  env:{CONFIG_FILE:"/config/config.json",GITHUB_TOKEN_FILE:"/credentials/token",OIDC_ISSUER:$issuer,API_CLIENT_ID:$clientId},
-  configFile:[{name:"config.json",mountPath:"/config/config.json",data:($inventory[0] | del(.auth) | tojson | @base64)}],
+  env:{CONFIG_FILE:"/runtime-config/config.json",GITHUB_TOKEN_FILE:"/credentials/token",OIDC_ISSUER:$issuer,API_CLIENT_ID:$clientId},
+  configFile:[{name:"config.json",mountPath:"/runtime-config/config.json",data:($inventory[0] | del(.auth) | tojson | @base64)}],
   extraVolumes:[{name:"github",secret:{secretName:"observatory-github"}}],
   extraVolumeMounts:[{name:"github",mountPath:"/credentials",readOnly:true}],
   resources:{requests:{cpu:"10m",memory:"64Mi"},limits:{cpu:null,memory:"256Mi"}}
 }' > "$work/server.json"
 # Preserve the existing backend Deployment/Service names while adopting them into Helm.
+# Use a distinct config directory: adoption can retain the legacy /config volume
+# mount, which conflicts with a subPath file mounted at /config/config.json.
 helm upgrade observatory mucsi96/rust-app --install --take-ownership --reset-values \
   --namespace observatory --version "$serverChartVersion" -f "$work/server.json" --wait
 helm upgrade observatory-client mucsi96/client-app --install --reset-values \
