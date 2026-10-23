@@ -1,4 +1,4 @@
-FROM rust:1.99.0-bookworm AS backend
+FROM rust:1.99.1-bookworm AS backend
 WORKDIR /src
 COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
 COPY src/ ./src/
