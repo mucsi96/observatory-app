@@ -2,6 +2,7 @@ use std::{env, future::IntoFuture, path::Path, time::Duration};
 
 use anyhow::Context;
 use observatory::{
+    auth::Auth,
     collector, config,
     integrations::{github, kubernetes},
     web,
@@ -31,7 +32,12 @@ async fn main() -> anyhow::Result<()> {
     let github_ca = env::var("GITHUB_CA_FILE").ok();
     let github = github::client(
         &env::var("GITHUB_API_URL").unwrap_or_else(|_| "https://api.github.com".into()),
-        env::var("GITHUB_TOKEN").unwrap_or_default(),
+        match env::var("GITHUB_TOKEN_FILE") {
+            Ok(path) => tokio::fs::read_to_string(path)
+                .await
+                .context("read GitHub token file")?,
+            Err(_) => env::var("GITHUB_TOKEN").unwrap_or_default(),
+        },
         github_ca.as_deref().map(Path::new),
     )?;
     let addr = env::var("LISTEN_ADDR").unwrap_or_else(|_| "127.0.0.1:8080".into());
@@ -43,13 +49,11 @@ async fn main() -> anyhow::Result<()> {
     let listener = TcpListener::bind(&addr)
         .await
         .context("bind HTTP listener")?;
-    let static_dir = env::var("STATIC_DIR").unwrap_or_else(|_| "frontend/dist".into());
-    anyhow::ensure!(
-        std::path::Path::new(&static_dir)
-            .join("index.html")
-            .is_file(),
-        "frontend build missing; run npm ci && npm run build in frontend/"
-    );
+    let auth = Auth::new(
+        env::var("OIDC_ISSUER").context("OIDC_ISSUER is required")?,
+        env::var("API_CLIENT_ID").context("API_CLIENT_ID is required")?,
+    )
+    .await?;
     let (sender, snapshots) = watch::channel(None);
     let stop = CancellationToken::new();
     let collection = tokio::spawn(collector::run(config, kube, github, sender, stop.clone()));
@@ -59,7 +63,7 @@ async fn main() -> anyhow::Result<()> {
         shutdown_token.cancel();
     });
     tracing::info!(%addr, "Observatory listening");
-    let server = axum::serve(listener, web::router(snapshots, static_dir))
+    let server = axum::serve(listener, web::router(snapshots, auth))
         .with_graceful_shutdown(stop.clone().cancelled_owned())
         .into_future();
     tokio::pin!(server);

@@ -13,13 +13,12 @@ await new Promise((resolve) => socket.listen(0, '127.0.0.1', resolve));
 const port = socket.address().port;
 await new Promise((resolve) => socket.close(resolve));
 const origin = `http://127.0.0.1:${port}`;
-const server = spawn(`${root}/target/debug/observatory`, [], {
+const server = spawn(process.execPath, [`${root}/frontend/scripts/test-gateway.mjs`], {
   cwd: root,
   env: {
     ...process.env,
     CONFIG_FILE: `${root}/config.example.json`,
-    STATIC_DIR: `${root}/frontend/dist`,
-    LISTEN_ADDR: `127.0.0.1:${port}`,
+    TEST_GATEWAY_PORT: String(port),
     GITHUB_TOKEN: '',
   },
   stdio: ['ignore', 'pipe', 'pipe'],

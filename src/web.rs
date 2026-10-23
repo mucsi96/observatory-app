@@ -1,24 +1,23 @@
-use std::{path::PathBuf, time::Duration};
+use std::time::Duration;
 
 use axum::{
     Json, Router,
     extract::State,
     http::{HeaderValue, StatusCode, header},
+    middleware,
     response::{IntoResponse, Response},
     routing::get,
 };
-use tower_http::{
-    services::ServeDir, set_header::SetResponseHeaderLayer, timeout::TimeoutLayer,
-    trace::TraceLayer,
-};
+use tower_http::{set_header::SetResponseHeaderLayer, timeout::TimeoutLayer, trace::TraceLayer};
 
+use crate::auth::{self, Auth};
 use crate::collector::SnapshotReceiver;
 
-pub fn router(snapshots: SnapshotReceiver, static_dir: impl Into<PathBuf>) -> Router {
+pub fn router(snapshots: SnapshotReceiver, auth: Auth) -> Router {
     Router::new()
+        .merge(Router::new().route("/api/apps", get(apps))
+            .route_layer(middleware::from_fn_with_state(auth, auth::authorize)))
         .route("/healthz", get(|| async { "ok" }))
-        .route("/api/apps", get(apps))
-        .fallback_service(ServeDir::new(static_dir.into()))
         .with_state(snapshots)
         .layer(SetResponseHeaderLayer::overriding(header::CACHE_CONTROL, HeaderValue::from_static("no-store")))
         // React Aria's press and mobile scroll helpers inject these two static styles.
