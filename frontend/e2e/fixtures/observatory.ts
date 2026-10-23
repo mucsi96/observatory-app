@@ -243,7 +243,8 @@ async function startObservatory(
       env: {
         ...globalThis.process.env,
         CONFIG_FILE: configFile,
-        STATIC_DIR: fileURLToPath(new URL('../../dist', import.meta.url)),
+        OIDC_ISSUER: 'http://127.0.0.1:9180/default',
+        API_CLIENT_ID: 'observatory-test-api',
         LISTEN_ADDR: new URL(url).host,
         GITHUB_TOKEN: 'github-private-token',
         GITHUB_API_URL: githubUrl,
@@ -320,6 +321,32 @@ async function startObservatory(
 }
 
 export const test = base.extend<{ observatory: (options?: Options) => Promise<Observatory> }>({
+  page: async ({ page }, use) => {
+    const response = await fetch('http://127.0.0.1:9180/token');
+    const { access_token } = await response.json();
+    await page.route('**/*', async (route) => {
+      const url = new URL(route.request().url());
+      if (url.pathname.startsWith('/api/')) {
+        return route.continue({
+          headers: { ...route.request().headers(), Authorization: `Bearer ${access_token}` },
+        });
+      }
+      const response = await route.fetch({
+        url: `http://127.0.0.1:8080${url.pathname}${url.search}`,
+      });
+      await route.fulfill({ response });
+    });
+    await use(page);
+  },
+  request: async ({ playwright }, use) => {
+    const response = await fetch('http://127.0.0.1:9180/token');
+    const { access_token } = await response.json();
+    const request = await playwright.request.newContext({
+      extraHTTPHeaders: { Authorization: `Bearer ${access_token}` },
+    });
+    await use(request);
+    await request.dispose();
+  },
   observatory: async ({ request }, use) => {
     const servers: Observatory[] = [];
     await use(async (options = {}) => {

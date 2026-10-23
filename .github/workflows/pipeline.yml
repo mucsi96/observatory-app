@@ -22,12 +22,12 @@ jobs:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: '1.99.0'
+          toolchain: '1.99.1'
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - uses: actions/setup-node@v6
         with:
-          node-version: '24'
+          node-version: '26'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: cargo fmt --all --check
@@ -82,11 +82,19 @@ jobs:
           push: false
           load: true
           tags: observatory:test
+      - name: Verify production client image
+        if: github.event_name == 'pull_request'
+        uses: docker/build-push-action@v6
+        with:
+          context: frontend
+          load: true
+          tags: observatory-client:test
       - name: Playwright production image E2E
         if: github.event_name == 'pull_request'
         working-directory: frontend
         env:
           OBSERVATORY_CONTAINER_IMAGE: observatory:test
+          OBSERVATORY_CLIENT_IMAGE: observatory-client:test
         run: npm run test:e2e
       - uses: actions/upload-artifact@v6
         if: failure()
@@ -95,30 +103,88 @@ jobs:
           path: frontend/test-results
           if-no-files-found: ignore
 
-  publish:
+  publish-server:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: test
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - id: version
+        uses: mucsi96/get-next-version@main
+        with:
+          prefix: server
+          src: .
+          ignore: frontend docs .github README.md AGENTS.md scripts
+      - uses: docker/setup-buildx-action@v3
+        if: steps.version.outputs.hasNextVersion == 'true'
       - uses: docker/login-action@v3
+        if: steps.version.outputs.hasNextVersion == 'true'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - uses: docker/build-push-action@v6
+        if: steps.version.outputs.hasNextVersion == 'true'
         with:
           context: .
           push: true
-          tags: ghcr.io/${{ github.repository }}:sha-${{ github.sha }}
-          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          tags: ghcr.io/${{ github.repository }}-server:${{ steps.version.outputs.version }}
+      - uses: softprops/action-gh-release@v2
+        if: steps.version.outputs.hasNextVersion == 'true'
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true
+
+  publish-client:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - id: version
+        uses: mucsi96/get-next-version@main
+        with:
+          prefix: client
+          src: frontend
+      - uses: docker/setup-buildx-action@v3
+        if: steps.version.outputs.hasNextVersion == 'true'
+      - uses: docker/login-action@v3
+        if: steps.version.outputs.hasNextVersion == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        if: steps.version.outputs.hasNextVersion == 'true'
+        with:
+          context: frontend
+          push: true
+          tags: ghcr.io/${{ github.repository }}-client:${{ steps.version.outputs.version }}
+      - uses: softprops/action-gh-release@v2
+        if: steps.version.outputs.hasNextVersion == 'true'
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true
 
   deploy:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.DEPLOY_ENABLED == 'true'
-    needs: publish
+    needs: [publish-server, publish-client]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -140,5 +206,6 @@ jobs:
       - name: Deploy to Kubernetes
         env:
           AZURE_KEYVAULT_NAME: ${{ secrets.AZURE_KEYVAULT_NAME }}
-          DASHBOARD_IMAGE: ghcr.io/${{ github.repository }}:sha-${{ github.sha }}
+          SERVER_IMAGE: ghcr.io/${{ github.repository }}-server:${{ needs.publish-server.outputs.version }}
+          CLIENT_IMAGE: ghcr.io/${{ github.repository }}-client:${{ needs.publish-client.outputs.version }}
         run: bash scripts/deploy.sh
