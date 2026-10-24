@@ -242,9 +242,11 @@ are retained. No Python upload script or client Docker build is involved.
 The deploy identity has separately scoped upload permissions for `$web` and
 `assets`. Azure website endpoints do not support CORS; browser requests use Blob.
 
-The deploy script pins `rust-app` **4.0.0** and `static-client-app` **3.0.0**
-(the latter requires publication of the document-response-header chart change).
-It receives `CLIENT_HEADERS_FILE` from the preparation step. The backend
+The deploy script pins `rust-app` **4.0.0** and `static-client-app` **4.0.0**
+(the latter requires publication of the CSP-only chart setting).
+It receives `CLIENT_CSP_FILE` from the preparation step; `contentSecurityPolicy`
+is the only configurable document header. The chart fixes `Referrer-Policy` to
+`no-referrer` and `X-Content-Type-Options` to `nosniff`. The backend
 release remains `observatory`; `--take-ownership` adopts its existing resources.
 The client release is `observatory-client`. Inventory is copied from the platform
 ConfigMap into the chart config Secret; rerun deployment after inventory changes.

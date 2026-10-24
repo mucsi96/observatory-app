@@ -228,5 +228,5 @@ jobs:
         env:
           AZURE_KEYVAULT_NAME: ${{ secrets.AZURE_KEYVAULT_NAME }}
           SERVER_IMAGE: ghcr.io/${{ github.repository }}-server:${{ needs.publish-server.outputs.version }}
-          CLIENT_HEADERS_FILE: client-publish/headers.json
+          CLIENT_CSP_FILE: client-publish/csp.txt
         run: bash scripts/deploy.sh

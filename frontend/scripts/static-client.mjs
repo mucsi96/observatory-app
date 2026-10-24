@@ -42,7 +42,7 @@ export async function prepareClient(directory, destination, assetBaseUrl, config
     'X-Content-Type-Options': 'nosniff',
     'Referrer-Policy': 'no-referrer',
   };
-  await writeFile(join(destination, 'headers.json'), JSON.stringify(headers));
+  await writeFile(join(destination, 'csp.txt'), headers['Content-Security-Policy']);
   return headers;
 }
 
