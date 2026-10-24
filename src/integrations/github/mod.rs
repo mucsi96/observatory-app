@@ -14,7 +14,7 @@ use crate::{
         RepositorySignals, WorkflowRun,
     },
 };
-use logs::{LOG_LIMIT, created_pull_requests};
+use logs::{LOG_LIMIT, affected_pull_requests};
 
 const JSON_LIMIT: usize = 8 * 1024 * 1024;
 
@@ -305,10 +305,12 @@ pub async fn dependency_update(
     )
     .await?;
     let repo = repository.to_owned();
-    let numbers = tokio::task::spawn_blocking(move || created_pull_requests(&bytes, &repo))
+    let numbers = tokio::task::spawn_blocking(move || affected_pull_requests(&bytes, &repo))
         .await
         .map_err(|_| IntegrationError::InvalidLogArchive)??;
-    for number in numbers {
+    let created = numbers.values().any(|created| *created);
+    let updated = numbers.values().any(|created| !*created);
+    for number in numbers.into_keys() {
         let pr: DependencyPr = get(github, &format!("{base}/pulls/{number}"), &[]).await?;
         result.mrs.push(DependencyPullRequest {
             number,
@@ -323,6 +325,10 @@ pub async fn dependency_update(
     }
     result.outcome = if result.mrs.is_empty() {
         DependencyOutcome::NoPullRequest
+    } else if created && updated {
+        DependencyOutcome::PullRequestsCreatedAndUpdated
+    } else if updated {
+        DependencyOutcome::PullRequestUpdated
     } else {
         DependencyOutcome::PullRequestCreated
     };

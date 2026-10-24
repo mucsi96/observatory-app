@@ -141,7 +141,27 @@ test('dependency attention reflects evidence separately from workflow success an
   await page.getByRole('button', { name: /Filter applications/ }).click();
   await page.getByRole('option', { name: 'Needs attention', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Hello', exact: true })).toBeVisible();
-  await expect(page.getByText('No PR created by this run')).toBeVisible();
+  await expect(page.getByText('No PR created or updated by this run')).toBeVisible();
+  repo.dependencyUpdate!.outcome = 'PR updated';
+  repo.dependencyUpdate!.mrs = [
+    {
+      number: 42,
+      title: 'Update dependencies',
+      url: 'https://github.com/o/r/pull/42',
+      state: 'merged',
+    },
+  ];
+  await page.getByRole('button', { name: 'Refresh' }).click();
+  await expect(page.getByRole('button', { name: 'Hello', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: /Filter applications/ }).click();
+  await page.getByRole('option', { name: 'All applications', exact: true }).click();
+  await expect(page.getByText('PRs updated by this run:')).toBeVisible();
+  await expect(page.getByRole('link', { name: '#42 Update dependencies' })).toHaveAttribute(
+    'href',
+    'https://github.com/o/r/pull/42',
+  );
+  await page.getByRole('button', { name: /Filter applications/ }).click();
+  await page.getByRole('option', { name: 'Needs attention', exact: true }).click();
   repo.dependencyUpdate!.outcome = 'pending';
   repo.dependencyUpdate!.run!.status = 'in_progress';
   await page.getByRole('button', { name: 'Refresh' }).click();
@@ -160,11 +180,11 @@ test('dependency attention reflects evidence separately from workflow success an
     ],
   };
   await page.getByRole('button', { name: 'Refresh' }).click();
-  await expect(page.getByText('PR creation unverified')).toBeVisible();
+  await expect(page.getByText('PR activity unverified')).toBeVisible();
   await expect(page.getByText('#42 <script>alert("x")</script>', { exact: true })).toBeVisible();
   await expect(page.locator('a[href^="javascript:"]')).toHaveCount(0);
   await expect(page.locator('table script')).toHaveCount(0);
-  await expect(page.getByText('No PR created by this run')).toHaveCount(0);
+  await expect(page.getByText('No PR created or updated by this run')).toHaveCount(0);
 });
 
 test('keyboard filtering and disclosure preserve focus and expansion under CSP', async ({

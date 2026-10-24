@@ -24,11 +24,15 @@ export function DependencySignal({
           </div>
           <span className={signalStyles.meta}>{relativeAge(run.updatedAt, now)}</span>
           {error || outcome === 'unknown' ? (
-            <span className={signalStyles.meta}>PR creation unverified</span>
+            <span className={signalStyles.meta}>PR activity unverified</span>
           ) : outcome === 'pending' ? (
             <span className={signalStyles.meta}>Awaiting run result</span>
           ) : outcome === 'no PR created' ? (
-            <StatusBadge status="pending" label="No PR created by this run" />
+            <StatusBadge status="pending" label="No PR created or updated by this run" />
+          ) : outcome === 'PR updated' ? (
+            <span className={signalStyles.meta}>PRs updated by this run:</span>
+          ) : outcome === 'PRs created and updated' ? (
+            <span className={signalStyles.meta}>PRs created and updated by this run:</span>
           ) : (
             <span className={signalStyles.meta}>PRs created by this run:</span>
           )}

@@ -12,6 +12,8 @@ import {
 const finished = '2026-10-01T10:10:00Z INFO: Repository finished (repository=o/r)\n';
 const created =
   '2026-10-01T10:05:00Z INFO: PR created (repository=o/r, branch=renovate/all)\n2026-10-01T10:05:00Z        "pr": 42,\n';
+const updated =
+  '2026-10-19T04:26:37.1874736Z DEBUG: PR updated...prNo: 42 (repository=o/r, branch=renovate/all)\n2026-10-19T04:26:37.1876455Z INFO: PR updated (repository=o/r, branch=renovate/all)\n2026-10-19T04:26:37.1877000Z        "pr": 42,\n';
 const logLimit = 16 * 1024 * 1024;
 const archive = (...logs: string[]) =>
   zipSync(Object.fromEntries(logs.map((log, index) => [`${index}_job.txt`, strToU8(log)])));
@@ -715,11 +717,21 @@ test('paginated workflow discovery uses the latest attempt and never forwards cr
 for (const [name, logs, expected, error] of [
   ['created', created + finished, 'PR created', false],
   ['deduplicated', created + created + finished, 'PR created', false],
+  ['updated existing PR', updated + finished, 'PR updated', false],
+  ['deduplicated updates', updated + updated + finished, 'PR updated', false],
+  ['created then updated', created + updated + finished, 'PR created', false],
+  ['updated then created', updated + created + finished, 'PR created', false],
   [
-    'updated is not created',
-    created.replace('PR created', 'PR updated') + finished,
+    'other repository update',
+    updated.replaceAll('repository=o/r', 'repository=other/r') + finished,
     'no PR created',
     false,
+  ],
+  [
+    'incomplete update',
+    '2026-10-19T04:26:37Z INFO: PR updated (repository=o/r)\n' + finished,
+    'unknown',
+    true,
   ],
   [
     'dry runs are not created',
@@ -750,9 +762,37 @@ for (const [name, logs, expected, error] of [
     expect(signal.repositoryData?.issues).toBe(3);
     expect(update?.outcome).toBe(expected);
     expect(Boolean(update?.error)).toBe(error);
-    expect(update?.mrs).toHaveLength(expected === 'PR created' ? 1 : 0);
+    expect(update?.mrs).toHaveLength(
+      expected === 'PR created' || expected === 'PR updated' ? 1 : 0,
+    );
+    if (expected === 'PR updated') {
+      expect(update?.mrs[0]).toMatchObject({
+        number: 42,
+        state: 'merged',
+        url: 'https://github.com/o/r/pull/42',
+      });
+    }
   });
 }
+
+test('created and updated PRs are both linked in the UI', async ({ observatory, page }) => {
+  const handler = dependencyHandler({ logs: created + updated.replaceAll('42', '43') + finished });
+  const app = await observatory({
+    github: (event) =>
+      event.path === '/repos/o/r/pulls/43'
+        ? { json: { title: 'Existing dependency PR', state: 'open', merged_at: null } }
+        : handler(event),
+  });
+  const update = (await app.snapshot()).apps[0].repositoryData?.dependencyUpdate;
+  expect(update?.outcome).toBe('PRs created and updated');
+  expect(update?.mrs.map((pr) => pr.number)).toEqual([42, 43]);
+  await page.goto(app.url);
+  await expect(page.getByText('PRs created and updated by this run:')).toBeVisible();
+  await expect(page.getByRole('link', { name: '#43 Existing dependency PR' })).toHaveAttribute(
+    'href',
+    'https://github.com/o/r/pull/43',
+  );
+});
 
 for (const [name, options, outcome, hasRun, hasError] of [
   ['running', { status: 'in_progress' }, 'pending', true, false],
