@@ -173,16 +173,17 @@ after application verification and does not affect the captured pixels.
   self-hosted Renovate workflow, with its status, timestamp and run link. Workflow
   discovery is paginated and its history is queried directly so weekly runs are
   not hidden by frequent delivery runs. PR links come **only from explicit Renovate
-  `PR created` events in the latest run attempt's logs**, scoped to that repository.
-  All PRs created by that attempt are linked, including ones since closed/merged.
-  Existing/updated PRs, timestamps, branch names, and previous attempts are never
-  substituted as evidence of creation. The fleet's plain-text Renovate log format
+   `PR created` and `PR updated` events in the latest run attempt's logs**, scoped to
+   that repository. All affected PRs are linked, including ones since closed/merged,
+   and the UI distinguishes creation, updates, and runs with both kinds of activity.
+   Timestamps, branch names, and previous attempts are never substituted as evidence.
+   The fleet's plain-text Renovate log format
   with timestamps and repository-scoped events is required (`LOG_LEVEL=debug`
   in the current workflows); a repository-finished event must also be present.
-  A completed run with no creation event shows **No PR created by this run** and
+   A completed run with neither event shows **No PR created or updated by this run** and
   appears in **Needs attention**, even when the workflow is green. This is a
-  review signal, not proof of failure: a run may legitimately have no updates or
-  update an existing PR. Running workflows show **Awaiting run result**. Missing,
+   review signal, not proof of failure: a run may legitimately have no updates.
+   Running workflows show **Awaiting run result**. Missing,
   expired, oversized, or unrecognized logs are **unverified**, never evidence of
   success. Log downloads require Actions read access and are bounded to 16 MiB
   compressed and total decompressed content per app per collection. Logs and

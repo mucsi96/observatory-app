@@ -130,6 +130,10 @@ pub enum DependencyOutcome {
     NoPullRequest,
     #[serde(rename = "PR created")]
     PullRequestCreated,
+    #[serde(rename = "PR updated")]
+    PullRequestUpdated,
+    #[serde(rename = "PRs created and updated")]
+    PullRequestsCreatedAndUpdated,
 }
 
 #[derive(Clone, Debug, Default, Serialize)]

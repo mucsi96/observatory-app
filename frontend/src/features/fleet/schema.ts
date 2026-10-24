@@ -7,7 +7,14 @@ export const dependencyUpdateSchema = z.object({
   mrs: z.array(
     z.object({ number: z.number(), title: z.string(), url: z.string(), state: z.string() }),
   ),
-  outcome: z.enum(['unknown', 'pending', 'no PR created', 'PR created']),
+  outcome: z.enum([
+    'unknown',
+    'pending',
+    'no PR created',
+    'PR created',
+    'PR updated',
+    'PRs created and updated',
+  ]),
   error: z.string().optional(),
 });
 
