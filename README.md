@@ -3,8 +3,8 @@
 A production fleet dashboard built with **Rust and React**. The backend uses Axum,
 Tokio, Serde, Reqwest, and kube-rs; the frontend uses React, TypeScript, Vite,
 TanStack Query, Zod, and [React UI](https://github.com/mucsi96/react-ui). Entra
-authentication uses the platform's existing OIDC proxy. Assets are served locally,
-with no external fonts or CDN dependencies.
+authentication uses the platform's existing OIDC proxy. Build assets are served
+directly from Azure Blob Storage, with no external font or CDN dependencies.
 
 Extracted from [p07](https://github.com/mucsi96/p07) with its application history.
 Provisioning lives in [k8s-modules](https://github.com/mucsi96/k8s-modules), module
@@ -61,11 +61,15 @@ Runtime settings: `CONFIG_FILE` (default `config.json`), `GITHUB_TOKEN` or
 `GITHUB_TOKEN_FILE`, `LISTEN_ADDR` (default `127.0.0.1:8080`), and `RUST_LOG`.
 `OIDC_ISSUER` and `API_CLIENT_ID` are required. The API validates RS256 signatures,
 issuer, audience, expiry, `api-access` scope and `readApps` role.
-The separate nginx client uses inline `window.__APP_CONFIG__` injected by the
+The static client uses inline `window.__APP_CONFIG__` injected by the
 client chart, with same-origin Faro telemetry at `/_telemetry/collect`.
-The chart authenticates document requests and owns nested SPA routing; nginx
-serves real files and rewrites only `/` for probes. Deployment computes the CSP
-hash for the exact inline config script, retaining the strict script policy.
+The chart authenticates documents and owns nested SPA routing. Index HTML lives
+in Azure's website container; all assets load directly from its public `assets`
+Blob container with app-origin CORS. Deployment computes the CSP hash for the
+exact inline config script and sets document response headers through Gateway
+API, retaining strict script/style hashes and frame restrictions. CSP allows
+assets only from the app and its specific Blob origin; APIs and telemetry stay
+same-origin. There is no client image or Kubernetes client Deployment.
 
 Optional server-side upstream settings are `GITHUB_API_URL` (default
 `https://api.github.com`), `GITHUB_CA_FILE`, `KUBERNETES_API_URL`,
@@ -213,12 +217,12 @@ The dependency dashboard tracks pending updates.
 
 ```text
 ghcr.io/mucsi96/observatory-app-server:<number>
-ghcr.io/mucsi96/observatory-app-client:<number>
+client-<number>: client-static.tar.gz release artifact
 ```
 
 Make the GHCR package public after its first publication so Kubernetes can pull it.
 Once the provisioning module sets repository variable `DEPLOY_ENABLED=true`,
-the pipeline also deploys the exact image it built, using Azure OIDC, kubelogin,
+the pipeline deploys the server image and tested static artifact using Azure OIDC, kubelogin,
 and the existing Twingate service account. Before provisioning, the deploy job is
 skipped so the first image can be published independently.
 
@@ -226,36 +230,25 @@ Terraform supplies repository secrets `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`,
 `AZURE_SUBSCRIPTION_ID`, `AZURE_KEYVAULT_NAME`, and `TWINGATE_SERVICE_KEY`.
 The deploy identity reads scoped secrets in the dedicated application vault:
 `k8s-config`, `hostname`, `api-client-id`, `forward-auth-config`, and
-`client-runtime-config`. It manages Helm application resources and Middleware
+`client-runtime-config`, and `client-storage-config`. It manages Helm application resources, Middleware and TraefikService
 in the `observatory` namespace.
 Runtime GitHub credentials stay in the platform-managed Kubernetes Secret.
 
-Manual deployment after Azure login and Twingate authentication:
+The client builds directly with Node/npm. The tested `frontend/dist` artifact is
+prepared by `frontend/scripts/static-client.mjs`, preserving bundle bytes while
+making HTML asset URLs absolute. Official `azure/login` and `azure/cli` actions
+batch-upload assets with Entra authentication, then publish index last. Old bundles
+are retained. No Python upload script or client Docker build is involved.
+The deploy identity has separately scoped upload permissions for `$web` and
+`assets`. Azure website endpoints do not support CORS; browser requests use Blob.
 
-```bash
-AZURE_KEYVAULT_NAME=p07-observatory \
-SERVER_IMAGE=ghcr.io/mucsi96/observatory-app-server:1 \
-CLIENT_IMAGE=ghcr.io/mucsi96/observatory-app-client:1 \
-bash scripts/deploy.sh
-```
-
-The script resolves published `rust-app` (minimum 2.0.0) and `client-app`
-(minimum 24.0.0) chart versions and passes them explicitly to Helm. The backend
+The deploy script pins `rust-app` **4.0.0** and `static-client-app` **3.0.0**
+(the latter requires publication of the document-response-header chart change).
+It receives `CLIENT_HEADERS_FILE` from the preparation step. The backend
 release remains `observatory`; `--take-ownership` adopts its existing resources.
 The client release is `observatory-client`. Inventory is copied from the platform
 ConfigMap into the chart config Secret; rerun deployment after inventory changes.
 The workload identity account is `observatory-api-workload-identity`.
-
-## Handoff from p07
-
-1. Release the supporting `setup_app_dashboard` module changes and pin that
-   published reference in p07. Provision the app proxy, dedicated vault,
-   workload identity, deployment RBAC and same-origin telemetry route with an
-   explicitly approved Terraform apply.
-2. Publish both numbered images and make their GHCR packages public.
-3. Deploy the application charts. The URL remains **https://apps.<dns-zone>**.
-   The API retains the inventory and GitHub secret; no database/storage migration
-   is involved. Provisioning v-93 alone does not supply the new app vault contract.
 
 Component releases use `get-next-version`, publish only changed sources, and
 forward the selected exact versions to deployment, including unchanged components.

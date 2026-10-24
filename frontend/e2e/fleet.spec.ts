@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { fleetSnapshot } from './fixtures/fleet';
 
-test('Rust serves the production React bundle under CSP and fleet interactions work', async ({
+test('storage serves the production React bundle under CSP and fleet interactions work', async ({
   page,
   request,
 }) => {
