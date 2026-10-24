@@ -29,7 +29,7 @@ kubectl get configmap observatory -o json | jq -er '.data["config.json"]' > "$wo
 OIDC_ISSUER=$(jq -er '.auth.issuer' "$work/inventory.json")
 
 helm repo add mucsi96 https://mucsi96.github.io/k8s-helm-charts --force-update
-serverChartVersion=4.0.0
+serverChartVersion=6.0.0
 clientChartVersion=4.0.0
 helm status "$AUTH_RELEASE" --namespace observatory >/dev/null
 helm show values mucsi96/rust-app --version "$serverChartVersion" | grep -q '^auth:'
