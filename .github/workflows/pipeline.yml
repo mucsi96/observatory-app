@@ -57,6 +57,13 @@ jobs:
         working-directory: frontend
       - run: npm run test:e2e
         working-directory: frontend
+      - name: Upload tested static client
+        uses: actions/upload-artifact@v6
+        with:
+          name: client-static
+          path: frontend/dist
+          if-no-files-found: error
+          retention-days: 7
       - name: Capture dashboard screenshots
         id: screenshots
         working-directory: frontend
@@ -82,19 +89,11 @@ jobs:
           push: false
           load: true
           tags: observatory:test
-      - name: Verify production client image
-        if: github.event_name == 'pull_request'
-        uses: docker/build-push-action@v6
-        with:
-          context: frontend
-          load: true
-          tags: observatory-client:test
       - name: Playwright production image E2E
         if: github.event_name == 'pull_request'
         working-directory: frontend
         env:
           OBSERVATORY_CONTAINER_IMAGE: observatory:test
-          OBSERVATORY_CLIENT_IMAGE: observatory-client:test
         run: npm run test:e2e
       - uses: actions/upload-artifact@v6
         if: failure()
@@ -149,7 +148,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      packages: write
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
@@ -161,26 +159,19 @@ jobs:
         with:
           prefix: client
           src: frontend
-      - uses: docker/setup-buildx-action@v3
-        if: steps.version.outputs.hasNextVersion == 'true'
-      - uses: docker/login-action@v3
-        if: steps.version.outputs.hasNextVersion == 'true'
+      - uses: actions/download-artifact@v6
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v6
-        if: steps.version.outputs.hasNextVersion == 'true'
-        with:
-          context: frontend
-          push: true
-          tags: ghcr.io/${{ github.repository }}-client:${{ steps.version.outputs.version }}
+          name: client-static
+          path: client-static
+      - name: Package static client
+        run: tar -czf client-static.tar.gz -C client-static .
       - uses: softprops/action-gh-release@v2
         if: steps.version.outputs.hasNextVersion == 'true'
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           target_commitish: ${{ github.sha }}
           generate_release_notes: true
+          files: client-static.tar.gz
 
   deploy:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.DEPLOY_ENABLED == 'true'
@@ -192,11 +183,41 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '26'
+      - uses: actions/download-artifact@v6
+        with:
+          name: client-static
+          path: client-static
       - uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Prepare static client
+        id: client
+        env:
+          AZURE_KEYVAULT_NAME: ${{ secrets.AZURE_KEYVAULT_NAME }}
+        run: |
+          storage=$(az keyvault secret show --vault-name "$AZURE_KEYVAULT_NAME" --name client-storage-config --query value -o tsv)
+          runtime=$(az keyvault secret show --vault-name "$AZURE_KEYVAULT_NAME" --name client-runtime-config --query value -o tsv)
+          node frontend/scripts/static-client.mjs client-static client-publish "$(jq -er '.assets_base_url' <<< "$storage")" "$runtime"
+          echo "account=$(jq -er '.account_name' <<< "$storage")" >> "$GITHUB_OUTPUT"
+      - name: Publish assets before index
+        uses: azure/cli@v2
+        env:
+          STORAGE_ACCOUNT: ${{ steps.client.outputs.account }}
+        with:
+          inlineScript: |
+            set -euo pipefail
+            az storage blob upload-batch --auth-mode login --account-name "$STORAGE_ACCOUNT" \
+              --destination assets --source client-publish/assets --overwrite true \
+              --content-cache-control no-cache --only-show-errors --output none
+            az storage blob upload --auth-mode login --account-name "$STORAGE_ACCOUNT" \
+              --container-name '$web' --name index.html --file client-publish/documents/index.html \
+              --overwrite true --content-type text/html --content-cache-control no-store \
+              --only-show-errors --output none
       - uses: azure/use-kubelogin@v1
         with:
           kubelogin-version: 'v0.2.7'
@@ -207,5 +228,5 @@ jobs:
         env:
           AZURE_KEYVAULT_NAME: ${{ secrets.AZURE_KEYVAULT_NAME }}
           SERVER_IMAGE: ghcr.io/${{ github.repository }}-server:${{ needs.publish-server.outputs.version }}
-          CLIENT_IMAGE: ghcr.io/${{ github.repository }}-client:${{ needs.publish-client.outputs.version }}
+          CLIENT_CSP_FILE: client-publish/csp.txt
         run: bash scripts/deploy.sh
