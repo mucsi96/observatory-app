@@ -91,8 +91,7 @@ npm --prefix frontend exec -- playwright install chromium
 npm --prefix frontend run test:e2e
 bash -n scripts/deploy.sh
 docker build -t observatory:local .
-docker build -t observatory-client:local frontend
-OBSERVATORY_CONTAINER_IMAGE=observatory:local OBSERVATORY_CLIENT_IMAGE=observatory-client:local npm --prefix frontend run test:e2e
+OBSERVATORY_CONTAINER_IMAGE=observatory:local npm --prefix frontend run test:e2e
 ```
 
 **All behavioral tests live in `frontend/e2e/` and run through Playwright.** The
@@ -253,3 +252,23 @@ The workload identity account is `observatory-api-workload-identity`.
 
 Component releases use `get-next-version`, publish only changed sources, and
 forward the selected exact versions to deployment, including unchanged components.
+
+### Shared UI hosting contract
+
+Observatory, Cooking and Skeleton use `static-client-app` 4.0.0: the gateway
+authenticates documents before rewriting deep links and injecting public config.
+Build assets load anonymously from Blob; APIs and telemetry stay on the app host.
+There is no browser OAuth implementation or environment-bootstrap fetch. Storage
+contains public build content, not protected application data.
+
+The three deployment secrets are `forward-auth-config` (the shared `.auth`
+reference), `client-runtime-config` (public startup values), and
+`client-storage-config` (account, document hostname and asset base URL). All
+pipelines test the static artifact, upload assets first and index last, and retain
+old bundles. Terraform owns storage/CORS/upload permissions and the proxy; app
+charts own routes and authentication middleware.
+
+Backend authorization remains stack-specific: Observatory validates JWTs on its
+read-only API; Cooking checks JWT roles and mutation Origin; Skeleton uses Spring
+Security CSRF with Angular XSRF. Observatory additionally retains its strict CSP
+through the shared chart's `contentSecurityPolicy` setting.
