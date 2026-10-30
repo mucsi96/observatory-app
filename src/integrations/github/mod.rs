@@ -1,3 +1,4 @@
+pub mod availability;
 pub mod logs;
 pub mod stack;
 

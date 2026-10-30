@@ -14,7 +14,7 @@ export default defineConfig({
     ? [{ name: 'container', testMatch: 'container.spec.ts', use: { ...devices['Desktop Chrome'] } }]
     : [
         { name: 'ui', testMatch: 'fleet.spec.ts', use: { ...devices['Desktop Chrome'] } },
-        { name: 'collectors', testMatch: 'collectors.spec.ts' },
+        { name: 'collectors', testMatch: ['collectors.spec.ts', 'availability.spec.ts'] },
         { name: 'auth', testMatch: 'auth.spec.ts' },
       ],
   webServer: {

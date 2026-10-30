@@ -16,6 +16,20 @@ export function ApplicationDetails({ app }: { app: ApplicationSignals }) {
           )}
         </div>
         <div className={styles.grid}>
+          <section aria-label={`${app.name} browser availability`}>
+            <Heading level={3} className={styles.heading}>
+              Browser availability
+            </Heading>
+            {app.browserCheck ? (
+              <>
+                <ExternalLink href={app.browserCheck.url}>{app.browserCheck.status}</ExternalLink>
+                <p>Last update: {app.browserCheck.updatedAt}</p>
+              </>
+            ) : (
+              <p>No browser check evidence</p>
+            )}
+            <p>Checks must succeed within the last 30 minutes to confirm availability.</p>
+          </section>
           <section aria-label={`${app.name} workloads`}>
             <Heading level={3} className={styles.heading}>
               Production workloads

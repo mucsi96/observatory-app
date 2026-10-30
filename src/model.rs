@@ -57,6 +57,7 @@ pub struct ApplicationSignals {
     #[serde(flatten)]
     pub application: Application,
     pub health: Health,
+    pub browser_check: Option<WorkflowRun>,
     pub workloads: Vec<Workload>,
     pub repository_data: Option<RepositorySignals>,
     pub errors: Vec<String>,
@@ -66,6 +67,7 @@ pub fn empty_signals(application: Application) -> ApplicationSignals {
     ApplicationSignals {
         application,
         health: Health::Unknown,
+        browser_check: None,
         workloads: Vec::new(),
         repository_data: None,
         errors: Vec::new(),

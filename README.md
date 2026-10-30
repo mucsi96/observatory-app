@@ -135,6 +135,16 @@ after application verification and does not affect the captured pixels.
 
 ## Signals
 
+Application health combines Kubernetes readiness with the latest main-branch run
+of `.github/workflows/application_health.yml` in each application's repository.
+This workflow must run a real production browser check on a ten-minute schedule.
+A successful completed run younger than 30 minutes confirms browser availability;
+failure or timeout makes the application unhealthy. Missing, stale, future-dated,
+cancelled, skipped, or in-progress evidence is unknown, never healthy. Workload
+failures remain visible independently. The details panel links to the evidence.
+The check's scope is defined by its repository: Learn Language verifies signed-out
+bootstrap and the Angular shell, not authenticated feature functionality.
+
 - **Frontend / Backend:** stack labels such as **Angular / Java** or **React / Rust**,
   detected from manifests on the repository's default branch. Frontend detection
   recognizes Angular, React, Vue, Svelte, Solid, and Preact dependencies; backend
@@ -158,10 +168,10 @@ after application verification and does not affect the captured pixels.
   "stack": { "frontend": "Angular", "backend": "Java" }
   ```
 
-- **Health:** all Deployments in each app namespace, using observed generation,
+- **Workload readiness:** all Deployments in each app namespace, using observed generation,
   updated/available/desired replicas, and failure conditions. Scaled-down workloads
   are degraded, empty namespaces are not deployed, API failures are unknown.
-  Health means Kubernetes readiness, not an external synthetic uptime probe.
+  Overall health also requires recent browser availability evidence as described above.
 - **Production version:** Deployment container image tags/digests, with separate
   frontend/backend images. Expand a row for full image references.
 - **Last deployment:** the most recent `deploy` job found in the latest 20 main

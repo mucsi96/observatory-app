@@ -106,7 +106,19 @@ async fn application(
         .await
         .unwrap_or(Err(IntegrationError::Deadline))
     };
-    let (cluster, repository, technology) = tokio::join!(cluster, repository, technology);
+    let browser = async {
+        if result.application.repository.is_empty() {
+            return Ok(None);
+        }
+        timeout_at(
+            deadline,
+            github::availability::collect(github, &result.application.repository),
+        )
+        .await
+        .unwrap_or(Err(IntegrationError::Deadline))
+    };
+    let (cluster, repository, technology, browser) =
+        tokio::join!(cluster, repository, technology, browser);
     result.application.stack = stack;
     if let Err(error) = technology {
         result.errors.push(format!("Technology stack: {error}"));
@@ -129,6 +141,11 @@ async fn application(
             Err(error) => result.errors.push(format!("GitHub: {error}")),
         }
     }
+    match browser {
+        Ok(run) => result.browser_check = run,
+        Err(error) => result.errors.push(format!("Browser availability: {error}")),
+    }
+    result.health = github::availability::health(result.health, result.browser_check.as_ref());
     result
 }
 

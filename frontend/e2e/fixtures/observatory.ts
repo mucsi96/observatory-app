@@ -55,6 +55,20 @@ export function descriptor(namespace = 'app', repository = 'o/r'): AppDescriptor
 }
 
 export function defaultGitHub(request: UpstreamRequest): UpstreamResponse {
+  if (request.path.endsWith('/actions/workflows/application_health.yml/runs'))
+    return {
+      json: {
+        workflow_runs: [
+          {
+            id: 99,
+            status: 'completed',
+            conclusion: 'success',
+            html_url: 'https://github.com/o/r/actions/runs/99',
+            updated_at: new Date().toISOString(),
+          },
+        ],
+      },
+    };
   if (request.path === '/search/issues')
     return { json: { total_count: 3, incomplete_results: false } };
   if (request.path.endsWith('/pulls')) return { json: [] };
