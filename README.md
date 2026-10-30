@@ -242,7 +242,7 @@ are retained. No Python upload script or client Docker build is involved.
 The deploy identity has separately scoped upload permissions for `$web` and
 `assets`. Azure website endpoints do not support CORS; browser requests use Blob.
 
-The deploy script pins published `rust-app` **6.0.0** and `static-client-app` **4.0.0**.
+The deploy script pins published `rust-app` **7.0.0** and `static-client-app` **5.0.0**.
 It receives `CLIENT_CSP_FILE` from the preparation step; `contentSecurityPolicy`
 is the only configurable document header. The chart fixes `Referrer-Policy` to
 `no-referrer` and `X-Content-Type-Options` to `nosniff`. The backend
@@ -256,7 +256,7 @@ forward the selected exact versions to deployment, including unchanged component
 
 ### Shared UI hosting contract
 
-Observatory, Cooking and Skeleton use `static-client-app` 4.0.0: the gateway
+Observatory, Cooking and Skeleton use `static-client-app` 5.0.0: the gateway
 authenticates documents before rewriting deep links. Faro configuration is built
 into each app. Deployment omits chart `runtimeConfig` and resets Helm values,
 removing the old index-config middleware from document requests.
