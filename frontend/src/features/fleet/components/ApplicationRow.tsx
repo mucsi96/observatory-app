@@ -3,7 +3,7 @@ import { CircleX, LoaderCircle, Minus, Plus } from 'lucide-react';
 import { ExternalLink } from '../../../components/ExternalLink';
 import { StatusBadge } from '../../../components/StatusBadge';
 import type { ApplicationSignals } from '../schema';
-import { imageVersion, relativeAge } from '../selectors';
+import { applicationKey, imageVersion, relativeAge } from '../selectors';
 import { ApplicationDetails } from './ApplicationDetails';
 import { DependencySignal } from './DependencySignal';
 import styles from './ApplicationRow.module.css';
@@ -41,7 +41,7 @@ export function ApplicationRow({ app, expanded, onToggle, now }: Props) {
                 className={styles.toggle}
                 onPress={onToggle}
                 aria-expanded={expanded}
-                aria-controls={expanded ? `details-${app.namespace}` : undefined}
+                aria-controls={expanded ? `details-${applicationKey(app)}` : undefined}
               >
                 {app.name}{' '}
                 {expanded ? (
@@ -69,7 +69,9 @@ export function ApplicationRow({ app, expanded, onToggle, now }: Props) {
               </code>
             ))
           ) : (
-            <span className={signalStyles.meta}>Not available</span>
+            <span className={signalStyles.meta}>
+              {app.namespace ? 'Not available' : 'Not applicable'}
+            </span>
           )}
         </td>
         <td>
@@ -81,7 +83,9 @@ export function ApplicationRow({ app, expanded, onToggle, now }: Props) {
               <span className={signalStyles.meta}>{relativeAge(deployment.updatedAt, now)}</span>
             </>
           ) : (
-            <span className={signalStyles.meta}>No recent deploy data</span>
+            <span className={signalStyles.meta}>
+              {app.namespace ? 'No recent deploy data' : 'Not applicable'}
+            </span>
           )}
         </td>
         <td>

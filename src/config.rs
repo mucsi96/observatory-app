@@ -32,6 +32,7 @@ pub fn validate(config: &Config) -> anyhow::Result<()> {
         bail!("environment and apps are required");
     }
     let mut namespaces = HashSet::new();
+    let mut repositories = HashSet::new();
     for app in &config.apps {
         let valid_url = Url::parse(&app.url).is_ok_and(|url| {
             url.scheme() == "https"
@@ -40,9 +41,13 @@ pub fn validate(config: &Config) -> anyhow::Result<()> {
                 && url.password().is_none()
         });
         if app.name.trim().is_empty()
-            || app.namespace.len() > 63
-            || !NAMESPACE.is_match(&app.namespace)
-            || !namespaces.insert(&app.namespace)
+            || if app.namespace.is_empty() {
+                app.repository.is_empty() || !repositories.insert(&app.repository)
+            } else {
+                app.namespace.len() > 63
+                    || !NAMESPACE.is_match(&app.namespace)
+                    || !namespaces.insert(&app.namespace)
+            }
             || (!app.repository.is_empty() && !REPOSITORY.is_match(&app.repository))
             || (!app.deployment_workflow.is_empty() && !WORKFLOW.is_match(&app.deployment_workflow))
             || [&app.stack.frontend, &app.stack.backend]

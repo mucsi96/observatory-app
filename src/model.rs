@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 pub struct Application {
     pub name: String,
+    #[serde(default)]
     pub namespace: String,
     #[serde(default)]
     pub repository: String,
@@ -29,6 +30,8 @@ pub enum Health {
     Unhealthy,
     #[serde(rename = "not deployed")]
     NotDeployed,
+    #[serde(rename = "not applicable")]
+    NotApplicable,
     Unknown,
 }
 

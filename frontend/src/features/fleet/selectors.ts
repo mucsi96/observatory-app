@@ -2,6 +2,10 @@ import type { ApplicationSignals, DependencyUpdate } from './schema';
 
 export type FleetFilter = 'all' | 'attention' | 'healthy';
 
+export function applicationKey(app: ApplicationSignals) {
+  return app.namespace || app.repository;
+}
+
 const failures = new Set([
   'unhealthy',
   'failed',
@@ -42,7 +46,7 @@ export function dependencyNeedsAttention(update: DependencyUpdate | null | undef
 export function needsAttention(app: ApplicationSignals) {
   const repo = app.repositoryData;
   return (
-    app.health !== 'healthy' ||
+    (app.health !== 'healthy' && app.health !== 'not applicable') ||
     app.errors.length > 0 ||
     repo?.mrs.some((pr) => pr.pipeline === 'failed') ||
     (repo?.deployment && failures.has(repo.deployment.status)) ||

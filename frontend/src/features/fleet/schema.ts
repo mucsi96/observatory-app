@@ -24,7 +24,7 @@ export const applicationSchema = z.object({
   repository: z.string(),
   url: z.string(),
   stack: z.object({ frontend: z.string().nullable(), backend: z.string().nullable() }).optional(),
-  health: z.enum(['healthy', 'degraded', 'unhealthy', 'not deployed', 'unknown']),
+  health: z.enum(['healthy', 'degraded', 'unhealthy', 'not deployed', 'not applicable', 'unknown']),
   workloads: z.array(
     z.object({
       name: z.string(),

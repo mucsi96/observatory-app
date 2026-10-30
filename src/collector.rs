@@ -16,7 +16,7 @@ use crate::{
         github::{self, GitHubClient},
         kubernetes,
     },
-    model::{Application, ApplicationSignals, Snapshot, empty_signals},
+    model::{Application, ApplicationSignals, Health, Snapshot, empty_signals},
 };
 
 pub const COLLECTION_DEADLINE: Duration = Duration::from_secs(50);
@@ -52,6 +52,9 @@ async fn application(
     let mut result = empty_signals(app);
     let mut stack = result.application.stack.clone();
     let cluster = async {
+        if result.application.namespace.is_empty() {
+            return Ok((Health::NotApplicable, Vec::new()));
+        }
         timeout_at(
             deadline,
             kubernetes::collect(kube, &result.application.namespace),
