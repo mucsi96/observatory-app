@@ -20,17 +20,14 @@ API_CLIENT_ID=$(secret api-client-id)
 AUTH_CONFIG=$(secret forward-auth-config)
 AUTH_RELEASE=$(jq -er '.release_name | select(type == "string" and length > 0)' <<<"$AUTH_CONFIG")
 PROXY_AUTH=$(jq -ce '.auth | select(.proxyService | type == "string" and length > 0) | select(.proxyPort | type == "number") | select(.mode == "api-token")' <<<"$AUTH_CONFIG")
-CLIENT_RUNTIME_CONFIG=$(secret client-runtime-config | jq -ce 'select(.clientLogUrl | type == "string") | select(.clientAppName | type == "string")')
-# A fixed same-origin config gives the exact script bytes Helm's toJson emits.
-jq -e --arg url "https://$HOSTNAME/_telemetry/collect" '. == {clientAppName:"observatory-client",clientLogUrl:$url}' <<<"$CLIENT_RUNTIME_CONFIG" >/dev/null
 CLIENT_STORAGE_CONFIG=$(secret client-storage-config)
 CLIENT_ORIGIN=$(jq -er '.hostname | select(test("^[a-z0-9.-]+\\.web\\.core\\.windows\\.net$"))' <<<"$CLIENT_STORAGE_CONFIG")
 kubectl get configmap observatory -o json | jq -er '.data["config.json"]' > "$work/inventory.json"
 OIDC_ISSUER=$(jq -er '.auth.issuer' "$work/inventory.json")
 
 helm repo add mucsi96 https://mucsi96.github.io/k8s-helm-charts --force-update
-serverChartVersion=6.0.0
-clientChartVersion=4.0.0
+serverChartVersion=7.0.0
+clientChartVersion=5.0.0
 helm status "$AUTH_RELEASE" --namespace observatory >/dev/null
 helm show chart mucsi96/rust-app --version "$serverChartVersion" >/dev/null
 helm show chart mucsi96/static-client-app --version "$clientChartVersion" >/dev/null
@@ -53,5 +50,5 @@ helm upgrade observatory mucsi96/rust-app --install --take-ownership --reset-val
 helm upgrade observatory-client mucsi96/static-client-app --install --reset-values \
   --namespace observatory --version "$clientChartVersion" \
   --set-string staticOrigin="$CLIENT_ORIGIN" --set-string host="$HOSTNAME" \
-  --set-json auth="$PROXY_AUTH" --set-json runtimeConfig="$CLIENT_RUNTIME_CONFIG" \
+  --set-json auth="$PROXY_AUTH" \
   --set-file contentSecurityPolicy="$CLIENT_CSP_FILE" --wait

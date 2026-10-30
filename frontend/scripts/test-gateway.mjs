@@ -33,18 +33,9 @@ const identity = createServer((req, res) => {
   res.writeHead(404).end();
 });
 await new Promise((resolve) => identity.listen(identityPort, '127.0.0.1', resolve));
-const config = {
-  clientAppName: 'observatory-client',
-  clientLogUrl: '/_telemetry/collect',
-};
 const assetBaseUrl = `http://localhost:${port + 2}/assets/`;
 const prepared = await mkdtemp(`${tmpdir()}/observatory-static-`);
-const documentHeaders = await prepareClient(
-  `${root}/frontend/dist`,
-  prepared,
-  assetBaseUrl,
-  config,
-);
+const documentHeaders = await prepareClient(`${root}/frontend/dist`, prepared, assetBaseUrl);
 const contentTypes = {
   '.html': 'text/html',
   '.js': 'text/javascript',
@@ -153,9 +144,7 @@ const gateway = createServer(async (req, res) => {
     const body = await readFile(`${prepared}/documents/index.html`);
     for (const [name, value] of Object.entries(documentHeaders)) res.setHeader(name, value);
     res.setHeader('Content-Type', 'text/html');
-    res.end(
-      document ? body.toString().replace('"__APP_CONFIG_JSON__"', JSON.stringify(config)) : body,
-    );
+    res.end(body);
   } catch {
     res.writeHead(404).end();
   }

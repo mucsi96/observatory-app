@@ -3,21 +3,7 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   base: './',
-  plugins: [
-    react(),
-    {
-      name: 'local-runtime-config',
-      apply: 'serve',
-      transformIndexHtml: (html) =>
-        html.replace(
-          '"__APP_CONFIG_JSON__"',
-          JSON.stringify({
-            clientAppName: 'observatory-client',
-            clientLogUrl: '/_telemetry/collect',
-          }),
-        ),
-    },
-  ],
+  plugins: [react()],
   server: {
     proxy: {
       '/api': 'http://127.0.0.1:8080',

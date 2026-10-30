@@ -201,8 +201,7 @@ jobs:
           AZURE_KEYVAULT_NAME: ${{ secrets.AZURE_KEYVAULT_NAME }}
         run: |
           storage=$(az keyvault secret show --vault-name "$AZURE_KEYVAULT_NAME" --name client-storage-config --query value -o tsv)
-          runtime=$(az keyvault secret show --vault-name "$AZURE_KEYVAULT_NAME" --name client-runtime-config --query value -o tsv)
-          node frontend/scripts/static-client.mjs client-static client-publish "$(jq -er '.assets_base_url' <<< "$storage")" "$runtime"
+          node frontend/scripts/static-client.mjs client-static client-publish "$(jq -er '.assets_base_url' <<< "$storage")"
           echo "account=$(jq -er '.account_name' <<< "$storage")" >> "$GITHUB_OUTPUT"
       - name: Publish assets before index
         uses: azure/cli@v2

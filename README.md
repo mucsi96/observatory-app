@@ -25,7 +25,7 @@ node frontend/scripts/test-gateway.mjs
 Open http://localhost:8080. Set `GITHUB_TOKEN` to read real repository data. Without
 in-cluster credentials Kubernetes signals are explicitly **unknown**. The example
 contains placeholder URLs, not demo data. The local server binds to loopback.
-The local gateway supplies inline public config and ephemeral test JWTs.
+The local gateway serves the built document unchanged and supplies ephemeral test JWTs.
 The production container runs as a non-root process in a distroless image and
 binds to `0.0.0.0:8080`.
 
@@ -61,13 +61,14 @@ Runtime settings: `CONFIG_FILE` (default `config.json`), `GITHUB_TOKEN` or
 `GITHUB_TOKEN_FILE`, `LISTEN_ADDR` (default `127.0.0.1:8080`), and `RUST_LOG`.
 `OIDC_ISSUER` and `API_CLIENT_ID` are required. The API validates RS256 signatures,
 issuer, audience, expiry, `api-access` scope and `readApps` role.
-The static client uses inline `window.__APP_CONFIG__` injected by the
-client chart, with same-origin Faro telemetry at `/_telemetry/collect`.
+The static client compiles Faro's public app name and `/_telemetry/collect` path
+into its bundle and resolves the URL against the browser's application origin.
+There is no global config, HTML bootstrap marker or response-body middleware.
 The chart authenticates documents and owns nested SPA routing. Index HTML lives
 in Azure's website container; all assets load directly from its public `assets`
-Blob container with app-origin CORS. Deployment computes the CSP hash for the
-exact inline config script and sets document response headers through Gateway
-API, retaining strict script/style hashes and frame restrictions. CSP allows
+Blob container with app-origin CORS. Deployment sets document response headers
+through Gateway API, retaining strict style hashes and frame restrictions.
+No inline script or script hash is needed. CSP allows
 assets only from the app and its specific Blob origin; APIs and telemetry stay
 same-origin. There is no client image or Kubernetes client Deployment.
 
@@ -229,7 +230,7 @@ Terraform supplies repository secrets `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`,
 `AZURE_SUBSCRIPTION_ID`, `AZURE_KEYVAULT_NAME`, and `TWINGATE_SERVICE_KEY`.
 The deploy identity reads scoped secrets in the dedicated application vault:
 `k8s-config`, `hostname`, `api-client-id`, `forward-auth-config`, and
-`client-runtime-config`, and `client-storage-config`. It manages Helm application resources, Middleware and TraefikService
+`client-storage-config`. It manages Helm application resources, Middleware and TraefikService
 in the `observatory` namespace.
 Runtime GitHub credentials stay in the platform-managed Kubernetes Secret.
 
@@ -241,7 +242,7 @@ are retained. No Python upload script or client Docker build is involved.
 The deploy identity has separately scoped upload permissions for `$web` and
 `assets`. Azure website endpoints do not support CORS; browser requests use Blob.
 
-The deploy script pins published `rust-app` **6.0.0** and `static-client-app` **4.0.0**.
+The deploy script pins published `rust-app` **7.0.0** and `static-client-app` **5.0.0**.
 It receives `CLIENT_CSP_FILE` from the preparation step; `contentSecurityPolicy`
 is the only configurable document header. The chart fixes `Referrer-Policy` to
 `no-referrer` and `X-Content-Type-Options` to `nosniff`. The backend
@@ -255,14 +256,16 @@ forward the selected exact versions to deployment, including unchanged component
 
 ### Shared UI hosting contract
 
-Observatory, Cooking and Skeleton use `static-client-app` 4.0.0: the gateway
-authenticates documents before rewriting deep links and injecting public config.
+Observatory, Cooking and Skeleton use `static-client-app` 5.0.0: the gateway
+authenticates documents before rewriting deep links. Faro configuration is built
+into each app. Deployment omits chart `runtimeConfig` and resets Helm values,
+removing the old index-config middleware from document requests.
 Build assets load anonymously from Blob; APIs and telemetry stay on the app host.
 There is no browser OAuth implementation or environment-bootstrap fetch. Storage
 contains public build content, not protected application data.
 
-The three deployment secrets are `forward-auth-config` (the shared `.auth`
-reference), `client-runtime-config` (public startup values), and
+The hosting/auth deployment secrets are `forward-auth-config` (the shared `.auth`
+reference) and
 `client-storage-config` (account, document hostname and asset base URL). All
 pipelines test the static artifact, upload assets first and index last, and retain
 old bundles. Terraform owns storage/CORS/upload permissions and the proxy; app

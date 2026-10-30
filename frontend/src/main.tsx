@@ -5,19 +5,10 @@ import '@mucsi96/react-ui/styles.css';
 import './styles.css';
 import { FleetDashboard } from './features/fleet/FleetDashboard';
 import { initializeFaro } from '@grafana/faro-web-sdk';
-import type { RuntimeConfig } from './runtime-config';
-
-const config: RuntimeConfig | undefined = window.__APP_CONFIG__;
-if (
-  !config ||
-  typeof config.clientLogUrl !== 'string' ||
-  typeof config.clientAppName !== 'string'
-) {
-  throw new Error('Missing frontend runtime configuration in index.html');
-}
+// Public telemetry settings are compiled into the bundle, independent of hosting.
 initializeFaro({
-  url: config.clientLogUrl,
-  app: { name: config.clientAppName, version: '1.0.0' },
+  url: new URL('/_telemetry/collect', window.location.origin).href,
+  app: { name: 'observatory-client', version: '1.0.0' },
   consoleInstrumentation: { disabledLevels: [] },
 });
 
