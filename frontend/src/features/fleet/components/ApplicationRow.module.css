@@ -53,12 +53,31 @@
 
 .pipelineStatuses {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   gap: 4px;
-  margin-top: 6px;
+}
+
+.pipelineLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  min-height: 28px;
   color: var(--bt-text-muted);
-  font-size: 11px;
-  line-height: 1.5;
+  border-radius: var(--bt-radius);
+}
+
+.pipelineLink span {
+  display: inline-flex;
+}
+
+.pipelineLink:focus-visible {
+  outline: 2px solid var(--bt-link);
+  outline-offset: 2px;
+}
+
+.passed {
+  color: var(--bt-success-soft);
 }
 
 .failed {

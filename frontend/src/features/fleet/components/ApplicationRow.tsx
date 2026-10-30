@@ -1,5 +1,13 @@
 import { Button } from '@mucsi96/react-ui';
-import { Minus, Plus } from 'lucide-react';
+import {
+  CircleCheck,
+  CircleHelp,
+  CircleMinus,
+  CircleX,
+  LoaderCircle,
+  Minus,
+  Plus,
+} from 'lucide-react';
 import { ExternalLink } from '../../../components/ExternalLink';
 import { StatusBadge } from '../../../components/StatusBadge';
 import type { ApplicationSignals } from '../schema';
@@ -16,22 +24,16 @@ interface Props {
   now: number;
 }
 
-const pipelineLabels = {
-  failed: 'with failed checks',
-  running: 'with checks running',
-  passed: 'with checks passed',
-  'no checks': 'with no checks',
-  unknown: 'with checks unknown',
+const pipelineStatuses = {
+  failed: { label: 'Checks failed', Icon: CircleX },
+  running: { label: 'Checks running', Icon: LoaderCircle },
+  passed: { label: 'Checks passed', Icon: CircleCheck },
+  'no checks': { label: 'No checks', Icon: CircleMinus },
+  unknown: { label: 'Checks unknown', Icon: CircleHelp },
 } as const;
 
 export function ApplicationRow({ app, expanded, onToggle, now }: Props) {
   const repo = app.repositoryData;
-  const pipelineStatuses = (Object.keys(pipelineLabels) as (keyof typeof pipelineLabels)[])
-    .map((status) => ({
-      status,
-      count: repo?.mrs.filter((pr) => pr.pipeline === status).length ?? 0,
-    }))
-    .filter(({ count }) => count > 0);
   const images = [...new Set(app.workloads.flatMap((workload) => workload.images))];
   const deployment = repo?.deployment;
   const initials = app.name
@@ -101,21 +103,28 @@ export function ApplicationRow({ app, expanded, onToggle, now }: Props) {
         </td>
         <td>
           {repo ? (
-            <>
-              <ExternalLink
-                href={`https://github.com/${app.repository}/pulls`}
-                className={styles.count}
-              >
-                {repo.openMRs} open {repo.openMRs === 1 ? 'PR' : 'PRs'}
-              </ExternalLink>
-              <span className={styles.pipelineStatuses}>
-                {pipelineStatuses.map(({ status, count }) => (
-                  <span key={status} className={styles[status]}>
-                    {count} {count === 1 ? 'PR' : 'PRs'} {pipelineLabels[status]}
-                  </span>
-                ))}
-              </span>
-            </>
+            repo.mrs.length ? (
+              <div className={styles.pipelineStatuses}>
+                {repo.mrs.map((pr) => {
+                  const { label, Icon } = pipelineStatuses[pr.pipeline];
+                  const description = `#${pr.number} ${pr.title}${pr.draft ? ' (draft)' : ''}: ${label}`;
+                  return (
+                    <ExternalLink key={pr.number} href={pr.url} className={styles.pipelineLink}>
+                      <span
+                        role="img"
+                        aria-label={description}
+                        title={description}
+                        className={styles[pr.pipeline]}
+                      >
+                        <Icon size={20} aria-hidden="true" />
+                      </span>
+                    </ExternalLink>
+                  );
+                })}
+              </div>
+            ) : (
+              <span className={signalStyles.meta}>No open PRs</span>
+            )
           ) : (
             <span className={signalStyles.meta}>PR data unavailable</span>
           )}
