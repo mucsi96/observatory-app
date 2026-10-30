@@ -1,5 +1,5 @@
 import { Button } from '@mucsi96/react-ui';
-import { Minus, Plus } from 'lucide-react';
+import { CircleX, LoaderCircle, Minus, Plus } from 'lucide-react';
 import { ExternalLink } from '../../../components/ExternalLink';
 import { StatusBadge } from '../../../components/StatusBadge';
 import type { ApplicationSignals } from '../schema';
@@ -18,6 +18,8 @@ interface Props {
 
 export function ApplicationRow({ app, expanded, onToggle, now }: Props) {
   const repo = app.repositoryData;
+  const failing = repo?.mrs.filter((pr) => pr.pipeline === 'failed').length ?? 0;
+  const running = repo?.mrs.filter((pr) => pr.pipeline === 'running').length ?? 0;
   const images = [...new Set(app.workloads.flatMap((workload) => workload.images))];
   const deployment = repo?.deployment;
   const initials = app.name
@@ -94,9 +96,27 @@ export function ApplicationRow({ app, expanded, onToggle, now }: Props) {
               >
                 {repo.openMRs}
               </ExternalLink>
-              <span className={signalStyles.meta}>
-                {repo.mrs.filter((pr) => pr.pipeline === 'failed').length} failing ·{' '}
-                {repo.mrs.filter((pr) => pr.pipeline === 'running').length} running
+              <span className={styles.pipelineStatuses}>
+                <span
+                  className={styles.failed}
+                  data-empty={failing === 0}
+                  role="img"
+                  aria-label={`${failing} failing`}
+                  title={`${failing} failing`}
+                >
+                  <CircleX size={14} aria-hidden="true" />
+                  <span aria-hidden="true">{failing}</span>
+                </span>
+                <span
+                  className={styles.running}
+                  data-empty={running === 0}
+                  role="img"
+                  aria-label={`${running} running`}
+                  title={`${running} running`}
+                >
+                  <LoaderCircle size={14} aria-hidden="true" />
+                  <span aria-hidden="true">{running}</span>
+                </span>
               </span>
             </>
           ) : (

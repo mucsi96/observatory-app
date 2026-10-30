@@ -50,3 +50,30 @@
 .count:hover {
   color: var(--bt-link);
 }
+
+.pipelineStatuses {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.pipelineStatuses > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.failed {
+  color: var(--bt-error-soft);
+}
+
+.running {
+  color: var(--bt-warn);
+}
+
+.pipelineStatuses > [data-empty='true'] {
+  color: var(--bt-text-muted);
+}
