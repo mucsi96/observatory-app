@@ -1,6 +1,62 @@
 import { expect, test } from '@playwright/test';
 import { fleetSnapshot } from './fixtures/fleet';
 
+test('each PR has its own accessible linked status icon without counts', async ({ page }) => {
+  const snapshot = fleetSnapshot();
+  const repo = snapshot.apps[0].repositoryData!;
+  repo.mrs[0].pipeline = 'passed';
+  await page.route('**/api/apps', (route) => route.fulfill({ json: snapshot }));
+  await page.goto('/');
+  const row = page
+    .getByRole('row')
+    .filter({ has: page.getByRole('button', { name: 'Hello', exact: true }) });
+  await expect(
+    row.getByRole('link', { name: '#12 Improve greeting (draft): Checks passed', exact: true }),
+  ).toHaveAttribute('href', 'https://github.com/owner/hello/pull/12');
+  await expect(row.getByRole('img', { name: /Checks passed/ })).toBeVisible();
+  await expect(row.getByText(/1 open PR|PR with/)).toHaveCount(0);
+  await expect(page.getByText('PR data unavailable', { exact: true })).toBeVisible();
+
+  repo.mrs = (['passed', 'failed', 'failed', 'running', 'no checks', 'unknown'] as const).map(
+    (pipeline, index) => ({
+      ...repo.mrs[0],
+      number: index + 1,
+      url: `https://github.com/owner/hello/pull/${index + 1}`,
+      pipeline,
+    }),
+  );
+  repo.openMRs = repo.mrs.length;
+  await page.getByRole('button', { name: 'Refresh' }).click();
+  const labels = [
+    'Checks passed',
+    'Checks failed',
+    'Checks failed',
+    'Checks running',
+    'No checks',
+    'Checks unknown',
+  ];
+  for (const [index, label] of labels.entries()) {
+    const description = `#${index + 1} Improve greeting (draft): ${label}`;
+    const link = row.getByRole('link', { name: description, exact: true });
+    await expect(link).toHaveAttribute('href', `https://github.com/owner/hello/pull/${index + 1}`);
+    await expect(link.getByRole('img')).toHaveAttribute('title', description);
+    await link.focus();
+    await expect(link).toBeFocused();
+  }
+  await expect(row.getByRole('img')).toHaveCount(6);
+
+  repo.mrs[0].url = 'javascript:alert(1)';
+  await page.getByRole('button', { name: 'Refresh' }).click();
+  await expect(row.getByRole('img')).toHaveCount(6);
+  await expect(row.getByRole('link', { name: /#1 Improve greeting/ })).toHaveCount(0);
+
+  repo.mrs = [];
+  repo.openMRs = 0;
+  await page.getByRole('button', { name: 'Refresh' }).click();
+  await expect(row.getByText('No open PRs', { exact: true })).toBeVisible();
+  await expect(row.getByRole('img')).toHaveCount(0);
+});
+
 test('storage serves the production React bundle under CSP and fleet interactions work', async ({
   page,
   request,
@@ -109,10 +165,9 @@ test('partial totals, search, filters and expansion state work through the brows
   await expect(page.getByRole('article', { name: 'Open MRs / PRs' })).toContainText('1+');
   await page.getByRole('button', { name: 'Hello', exact: true }).click();
   await expect(page.getByText('Draft', { exact: true })).toBeVisible();
-  await expect(page.getByRole('link', { name: '#12 Improve greeting' })).toHaveAttribute(
-    'href',
-    'https://github.com/owner/hello/pull/12',
-  );
+  await expect(
+    page.getByRole('link', { name: '#12 Improve greeting', exact: true }),
+  ).toHaveAttribute('href', 'https://github.com/owner/hello/pull/12');
   await page.getByRole('searchbox').fill('language');
   await expect(page.getByRole('button', { name: 'Hello', exact: true })).toHaveCount(0);
   await page.getByRole('searchbox').clear();

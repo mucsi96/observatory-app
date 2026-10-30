@@ -74,6 +74,15 @@ try {
   legacy.repositoryData.dependencyUpdate.run.url = 'https://github.com/owner/legacy/actions/runs/2';
   snapshot.apps.splice(1, 0, legacy);
 
+  const repo = snapshot.apps[0].repositoryData;
+  repo.mrs = ['failed', 'running', 'passed', 'no checks', 'unknown'].map((pipeline, index) => ({
+    ...repo.mrs[0],
+    number: 12 + index,
+    url: `https://github.com/owner/hello/pull/${12 + index}`,
+    pipeline,
+  }));
+  repo.openMRs = repo.mrs.length;
+
   const browser = await chromium.launch();
   browsers.push(browser);
   const page = await browser.newPage({

@@ -53,17 +53,31 @@
 
 .pipelineStatuses {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 6px;
-  font-size: 11px;
-  line-height: 1.5;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
-.pipelineStatuses > span {
+.pipelineLink {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+  min-width: 28px;
+  min-height: 28px;
+  color: var(--bt-text-muted);
+  border-radius: var(--bt-radius);
+}
+
+.pipelineLink span {
+  display: inline-flex;
+}
+
+.pipelineLink:focus-visible {
+  outline: 2px solid var(--bt-link);
+  outline-offset: 2px;
+}
+
+.passed {
+  color: var(--bt-success-soft);
 }
 
 .failed {
@@ -72,8 +86,4 @@
 
 .running {
   color: var(--bt-warn);
-}
-
-.pipelineStatuses > [data-empty='true'] {
-  color: var(--bt-text-muted);
 }
