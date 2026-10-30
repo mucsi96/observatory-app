@@ -70,7 +70,7 @@ test('API verifies signatures, issuer, audience, expiry, scope and role', async 
   }
 });
 
-test('inline config boots deep links and browser logs use the same origin', async ({ page }) => {
+test('built config boots deep links and browser logs use the same origin', async ({ page }) => {
   const environmentRequests: string[] = [];
   page.on('request', (request) => {
     if (request.url().includes('/api/environment')) environmentRequests.push(request.url());
