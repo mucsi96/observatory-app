@@ -2,15 +2,16 @@ import { Alert, Heading } from '@mucsi96/react-ui';
 import { ExternalLink } from '../../../components/ExternalLink';
 import { StatusBadge } from '../../../components/StatusBadge';
 import type { ApplicationSignals } from '../schema';
+import { applicationKey } from '../selectors';
 import styles from './ApplicationDetails.module.css';
 import signalStyles from './Signal.module.css';
 
 export function ApplicationDetails({ app }: { app: ApplicationSignals }) {
   return (
-    <tr className={styles.details} id={`details-${app.namespace}`}>
+    <tr className={styles.details} id={`details-${applicationKey(app)}`}>
       <td colSpan={8}>
         <div className={styles.links}>
-          <ExternalLink href={app.url}>Open application ↗</ExternalLink>
+          {app.namespace && <ExternalLink href={app.url}>Open application ↗</ExternalLink>}
           {app.repository && (
             <ExternalLink href={`https://github.com/${app.repository}`}>Repository ↗</ExternalLink>
           )}
@@ -38,7 +39,11 @@ export function ApplicationDetails({ app }: { app: ApplicationSignals }) {
                 </div>
               ))
             ) : (
-              <p className={signalStyles.meta}>No deployment data available.</p>
+              <p className={signalStyles.meta}>
+                {app.namespace
+                  ? 'No deployment data available.'
+                  : 'Repository only — no Kubernetes workloads.'}
+              </p>
             )}
           </section>
           <section aria-label={`${app.name} pull requests`}>

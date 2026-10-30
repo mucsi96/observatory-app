@@ -10,7 +10,7 @@ import type { Snapshot } from '../../src/features/fleet/schema';
 
 export interface AppDescriptor {
   name: string;
-  namespace: string;
+  namespace?: string;
   repository?: string;
   url: string;
   deploymentWorkflow?: string;

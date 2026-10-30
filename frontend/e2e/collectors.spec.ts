@@ -15,6 +15,70 @@ const created =
 const updated =
   '2026-10-19T04:26:37.1874736Z DEBUG: PR updated...prNo: 42 (repository=o/r, branch=renovate/all)\n2026-10-19T04:26:37.1876455Z INFO: PR updated (repository=o/r, branch=renovate/all)\n2026-10-19T04:26:37.1877000Z        "pr": 42,\n';
 const logLimit = 16 * 1024 * 1024;
+
+test('repository-only entries collect GitHub signals without Kubernetes and expand independently', async ({
+  observatory,
+  page,
+}) => {
+  const app = await observatory({
+    apps: ['p07', 'k8s-modules'].map((name) => ({
+      name,
+      repository: `mucsi96/${name}`,
+      url: `https://github.com/mucsi96/${name}`,
+    })),
+  });
+  const snapshot = await app.snapshot();
+  expect(snapshot.apps).toHaveLength(2);
+  for (const signal of snapshot.apps) {
+    expect(signal.health).toBe('not applicable');
+    expect(signal.workloads).toEqual([]);
+    expect(signal.errors).toEqual([]);
+    expect(signal.repositoryData?.issues).toBe(3);
+    expect(signal.repositoryData?.openMRs).toBe(0);
+  }
+  expect(app.requests.kubernetes).toEqual([]);
+  for (const repo of ['p07', 'k8s-modules']) {
+    expect(app.requests.github.some((event) => event.path === `/repos/mucsi96/${repo}/pulls`)).toBe(
+      true,
+    );
+  }
+  await page.goto(app.url);
+  await expect(page.getByRole('article', { name: 'Healthy', exact: true })).toContainText(
+    'no Kubernetes workloads tracked',
+  );
+  await page.getByRole('button', { name: 'p07', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'p07 workloads' })).toContainText(
+    'Repository only',
+  );
+  await expect(page.getByRole('region', { name: 'k8s-modules workloads' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'k8s-modules', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'k8s-modules workloads' })).toContainText(
+    'Repository only',
+  );
+  await expect(page.getByRole('link', { name: 'Open application ↗' })).toHaveCount(0);
+  await page.getByRole('button', { name: /Filter applications/ }).click();
+  await page.getByRole('option', { name: 'Needs attention', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'p07', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'k8s-modules', exact: true })).toHaveCount(0);
+});
+
+test('repository-only GitHub failures remain visible and need attention', async ({
+  observatory,
+  page,
+}) => {
+  const app = await observatory({
+    apps: [{ name: 'p07', repository: 'mucsi96/p07', url: 'https://github.com/mucsi96/p07' }],
+    github: (event) => (event.path.endsWith('/pulls') ? { status: 403 } : defaultGitHub(event)),
+  });
+  const snapshot = await app.snapshot();
+  expect(snapshot.apps[0].health).toBe('not applicable');
+  expect(snapshot.apps[0].errors.some((error) => error.startsWith('GitHub:'))).toBe(true);
+  expect(app.requests.kubernetes).toEqual([]);
+  await page.goto(app.url);
+  await page.getByRole('button', { name: /Filter applications/ }).click();
+  await page.getByRole('option', { name: 'Needs attention', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'p07', exact: true })).toBeVisible();
+});
 const archive = (...logs: string[]) =>
   zipSync(Object.fromEntries(logs.map((log, index) => [`${index}_job.txt`, strToU8(log)])));
 
@@ -627,6 +691,11 @@ test('invalid application descriptors are rejected at process startup', async ({
     [{ ...descriptor(), stack: { frontend: ' ' } }],
     [{ ...descriptor(), stack: { backend: 'x'.repeat(121) } }],
     [descriptor(), descriptor()],
+    [{ ...descriptor(), namespace: '', repository: '' }],
+    [
+      { ...descriptor(), namespace: '' },
+      { ...descriptor(), namespace: '' },
+    ],
   ]) {
     await expect(observatory({ apps })).rejects.toThrow('invalid app configuration');
   }

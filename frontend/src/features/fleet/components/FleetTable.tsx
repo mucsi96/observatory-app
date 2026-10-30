@@ -1,4 +1,5 @@
 import type { ApplicationSignals } from '../schema';
+import { applicationKey } from '../selectors';
 import { ApplicationRow } from './ApplicationRow';
 import styles from './FleetTable.module.css';
 
@@ -39,10 +40,10 @@ export function FleetTable({ apps, expanded, onToggle, now, emptyMessage }: Prop
           {apps.length ? (
             apps.map((app) => (
               <ApplicationRow
-                key={app.namespace}
+                key={applicationKey(app)}
                 app={app}
-                expanded={expanded.has(app.namespace)}
-                onToggle={() => onToggle(app.namespace)}
+                expanded={expanded.has(applicationKey(app))}
+                onToggle={() => onToggle(applicationKey(app))}
                 now={now}
               />
             ))

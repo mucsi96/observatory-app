@@ -61,6 +61,12 @@ Runtime settings: `CONFIG_FILE` (default `config.json`), `GITHUB_TOKEN` or
 `GITHUB_TOKEN_FILE`, `LISTEN_ADDR` (default `127.0.0.1:8080`), and `RUST_LOG`.
 `OIDC_ISSUER` and `API_CLIENT_ID` are required. The API validates RS256 signatures,
 issuer, audience, expiry, `api-access` scope and `readApps` role.
+
+Inventory entries without a `namespace` track repositories only. Supply `name`,
+`repository` (`owner/repo`) and an HTTPS `url`. PRs, checks, issues and workflow
+signals are collected normally; Kubernetes collection is skipped and workload
+health is **not applicable**. Repository-only entries must have unique repositories.
+
 The static client compiles Faro's public app name and `/_telemetry/collect` path
 into its bundle and resolves the URL against the browser's application origin.
 There is no global config, HTML bootstrap marker or response-body middleware.
