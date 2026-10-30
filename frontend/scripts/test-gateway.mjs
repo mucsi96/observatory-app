@@ -1,7 +1,9 @@
 // Local E2E gateway/identity fixture. Never included in production images.
 import { createServer, request as proxyRequest } from 'node:http';
-import { generateKeyPairSync, sign, createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { generateKeyPairSync, sign } from 'node:crypto';
+import { readFile, mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { prepareClient } from './static-client.mjs';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { resolve, extname } from 'node:path';
@@ -35,12 +37,46 @@ const config = {
   clientAppName: 'observatory-client',
   clientLogUrl: '/_telemetry/collect',
 };
-const script = `window.__APP_CONFIG__ = ${JSON.stringify(config)};`;
-const hash = createHash('sha256').update(script).digest('base64');
-const template = await readFile(`${root}/frontend/nginx.conf.template`, 'utf8');
-const csp = template
-  .match(/add_header Content-Security-Policy "([^"]+)"/)[1]
-  .replace('${APP_CONFIG_CSP_HASH}', hash);
+const assetBaseUrl = `http://localhost:${port + 2}/assets/`;
+const prepared = await mkdtemp(`${tmpdir()}/observatory-static-`);
+const documentHeaders = await prepareClient(
+  `${root}/frontend/dist`,
+  prepared,
+  assetBaseUrl,
+  config,
+);
+const contentTypes = {
+  '.html': 'text/html',
+  '.js': 'text/javascript',
+  '.css': 'text/css',
+  '.svg': 'image/svg+xml',
+  '.woff2': 'font/woff2',
+  '.png': 'image/png',
+};
+const assets = createServer(async (req, res) => {
+  const url = new URL(req.url, assetBaseUrl);
+  // Collector fixtures use isolated random-port app origins on the same loopback host.
+  if (
+    /^http:\/\/127\.0\.0\.1:\d+$/.test(req.headers.origin ?? '') &&
+    !url.searchParams.has('no-cors')
+  ) {
+    res.setHeader('Access-Control-Allow-Origin', req.headers.origin);
+    res.setHeader('Vary', 'Origin');
+  }
+  const path = resolve(prepared, `.${decodeURIComponent(url.pathname)}`);
+  if (!path.startsWith(`${prepared}/assets/`) || req.headers.cookie || req.headers.authorization) {
+    res.writeHead(403).end();
+    return;
+  }
+  try {
+    const body = await readFile(path);
+    res.setHeader('Content-Type', contentTypes[extname(path)] ?? 'application/octet-stream');
+    res.end(body);
+  } catch {
+    res.writeHead(404).end();
+  }
+});
+await new Promise((resolve) => assets.listen(port + 2, resolve));
 const inventory = process.env.CONFIG_FILE ?? `${root}/config.example.json`;
 const env = {
   ...process.env,
@@ -76,22 +112,6 @@ const backend = image
       { stdio: 'inherit' },
     )
   : spawn(`${root}/target/debug/observatory`, [], { env, stdio: 'inherit' });
-const clientImage = process.env.OBSERVATORY_CLIENT_IMAGE;
-const client = clientImage
-  ? spawn(
-      'docker',
-      [
-        'run',
-        '--rm',
-        '-p',
-        `127.0.0.1:${port + 2}:8000`,
-        '-e',
-        `APP_CONFIG_CSP_HASH=${hash}`,
-        clientImage,
-      ],
-      { stdio: 'inherit' },
-    )
-  : null;
 function proxy(req, res, target, headers = {}) {
   const upstream = proxyRequest(
     target,
@@ -122,32 +142,17 @@ const gateway = createServer(async (req, res) => {
   }
   const document =
     url.pathname === '/' ||
+    url.pathname === '/index.html' ||
     req.headers['sec-fetch-dest'] === 'document' ||
     req.headers.accept?.includes('text/html');
-  const path = document ? '/index.html' : url.pathname;
+  if (!document) {
+    res.writeHead(404).end();
+    return;
+  }
   try {
-    if (clientImage && !document) return proxy(req, res, `http://127.0.0.1:${port + 2}${req.url}`);
-    const fullPath = resolve(root, `frontend/dist${path}`);
-    if (!fullPath.startsWith(`${root}/frontend/dist/`)) {
-      res.writeHead(404).end();
-      return;
-    }
-    const response = clientImage ? await fetch(`http://127.0.0.1:${port + 2}/index.html`) : null;
-    if (response && !response.ok) throw new Error('client not ready');
-    const body = response ? Buffer.from(await response.arrayBuffer()) : await readFile(fullPath);
-    res.setHeader(
-      'Content-Security-Policy',
-      response?.headers.get('content-security-policy') ?? csp,
-    );
-    res.setHeader(
-      'Content-Type',
-      {
-        '.html': 'text/html',
-        '.js': 'text/javascript',
-        '.css': 'text/css',
-        '.svg': 'image/svg+xml',
-      }[extname(path)] ?? 'application/octet-stream',
-    );
+    const body = await readFile(`${prepared}/documents/index.html`);
+    for (const [name, value] of Object.entries(documentHeaders)) res.setHeader(name, value);
+    res.setHeader('Content-Type', 'text/html');
     res.end(
       document ? body.toString().replace('"__APP_CONFIG_JSON__"', JSON.stringify(config)) : body,
     );
@@ -158,7 +163,8 @@ const gateway = createServer(async (req, res) => {
 await new Promise((resolve) => gateway.listen(port, '127.0.0.1', resolve));
 function stop() {
   backend.kill('SIGTERM');
-  client?.kill('SIGTERM');
+  assets.close();
+  void rm(prepared, { recursive: true, force: true });
   gateway.close();
   identity.close();
 }

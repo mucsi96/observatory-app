@@ -326,6 +326,12 @@ export const test = base.extend<{ observatory: (options?: Options) => Promise<Ob
     const { access_token } = await response.json();
     await page.route('**/*', async (route) => {
       const url = new URL(route.request().url());
+      // Fulfilled collector documents have no network address-space metadata in
+      // Chromium. Fetch their assets through Playwright too; auth.spec exercises
+      // genuine cross-origin browser requests and CORS without interception.
+      if (url.origin === 'http://localhost:8082') {
+        return route.fulfill({ response: await route.fetch() });
+      }
       if (url.pathname.startsWith('/api/')) {
         return route.continue({
           headers: { ...route.request().headers(), Authorization: `Bearer ${access_token}` },

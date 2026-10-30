@@ -1,4 +1,46 @@
 import { test, expect } from '@playwright/test';
+import { fleetSnapshot } from './fixtures/fleet';
+
+test('compiled assets use storage CORS while documents and APIs stay on the app', async ({
+  page,
+  context,
+  request,
+}) => {
+  await context.addCookies([
+    { name: 'fixture-session', value: 'private', url: 'http://127.0.0.1:8080' },
+  ]);
+  const assets: string[] = [];
+  page.on('request', (req) => {
+    if (['script', 'stylesheet', 'font', 'image'].includes(req.resourceType()))
+      assets.push(req.url());
+  });
+  await page.route('**/api/apps', (route) => route.fulfill({ json: fleetSnapshot() }));
+  await page.goto('/fleet/nested?source=bookmark');
+  await expect(page.getByRole('button', { name: 'Hello', exact: true })).toBeVisible();
+  await page.evaluate(() => document.fonts.ready);
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Hello', exact: true })).toBeVisible();
+  expect(assets.length).toBeGreaterThan(1);
+  expect(assets.every((url) => url.startsWith('http://localhost:8082/assets/'))).toBe(true);
+  expect(assets.some((url) => url.endsWith('.js'))).toBe(true);
+  expect(assets.some((url) => url.endsWith('.css'))).toBe(true);
+  const bundle = assets.find((url) => url.endsWith('.js'))!;
+  const allowed = await request.get(bundle, { headers: { Origin: 'http://127.0.0.1:8080' } });
+  expect(allowed.headers()['access-control-allow-origin']).toBe('http://127.0.0.1:8080');
+  const denied = await request.get(bundle, { headers: { Origin: 'https://other.example' } });
+  expect(denied.headers()['access-control-allow-origin']).toBeUndefined();
+  const blocked = await page.evaluate(async (url) => {
+    try {
+      await import(/* @vite-ignore */ `${url}?no-cors`);
+      return false;
+    } catch {
+      return true;
+    }
+  }, bundle);
+  expect(blocked).toBe(true);
+  expect((await request.get('/assets/missing.js')).status()).toBe(404);
+  expect((await request.get('http://localhost:8082/assets/missing.js')).status()).toBe(404);
+});
 
 test('API verifies signatures, issuer, audience, expiry, scope and role', async ({ request }) => {
   const api = 'http://127.0.0.1:8081/api/apps';
