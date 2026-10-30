@@ -53,17 +53,12 @@
 
 .pipelineStatuses {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  gap: 4px;
   margin-top: 6px;
+  color: var(--bt-text-muted);
   font-size: 11px;
   line-height: 1.5;
-}
-
-.pipelineStatuses > span {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
 }
 
 .failed {
@@ -72,8 +67,4 @@
 
 .running {
   color: var(--bt-warn);
-}
-
-.pipelineStatuses > [data-empty='true'] {
-  color: var(--bt-text-muted);
 }

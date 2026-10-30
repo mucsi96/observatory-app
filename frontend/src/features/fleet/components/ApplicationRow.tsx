@@ -1,5 +1,5 @@
 import { Button } from '@mucsi96/react-ui';
-import { CircleX, LoaderCircle, Minus, Plus } from 'lucide-react';
+import { Minus, Plus } from 'lucide-react';
 import { ExternalLink } from '../../../components/ExternalLink';
 import { StatusBadge } from '../../../components/StatusBadge';
 import type { ApplicationSignals } from '../schema';
@@ -16,10 +16,22 @@ interface Props {
   now: number;
 }
 
+const pipelineLabels = {
+  failed: 'with failed checks',
+  running: 'with checks running',
+  passed: 'with checks passed',
+  'no checks': 'with no checks',
+  unknown: 'with checks unknown',
+} as const;
+
 export function ApplicationRow({ app, expanded, onToggle, now }: Props) {
   const repo = app.repositoryData;
-  const failing = repo?.mrs.filter((pr) => pr.pipeline === 'failed').length ?? 0;
-  const running = repo?.mrs.filter((pr) => pr.pipeline === 'running').length ?? 0;
+  const pipelineStatuses = (Object.keys(pipelineLabels) as (keyof typeof pipelineLabels)[])
+    .map((status) => ({
+      status,
+      count: repo?.mrs.filter((pr) => pr.pipeline === status).length ?? 0,
+    }))
+    .filter(({ count }) => count > 0);
   const images = [...new Set(app.workloads.flatMap((workload) => workload.images))];
   const deployment = repo?.deployment;
   const initials = app.name
@@ -94,33 +106,18 @@ export function ApplicationRow({ app, expanded, onToggle, now }: Props) {
                 href={`https://github.com/${app.repository}/pulls`}
                 className={styles.count}
               >
-                {repo.openMRs}
+                {repo.openMRs} open {repo.openMRs === 1 ? 'PR' : 'PRs'}
               </ExternalLink>
               <span className={styles.pipelineStatuses}>
-                <span
-                  className={styles.failed}
-                  data-empty={failing === 0}
-                  role="img"
-                  aria-label={`${failing} failing`}
-                  title={`${failing} failing`}
-                >
-                  <CircleX size={14} aria-hidden="true" />
-                  <span aria-hidden="true">{failing}</span>
-                </span>
-                <span
-                  className={styles.running}
-                  data-empty={running === 0}
-                  role="img"
-                  aria-label={`${running} running`}
-                  title={`${running} running`}
-                >
-                  <LoaderCircle size={14} aria-hidden="true" />
-                  <span aria-hidden="true">{running}</span>
-                </span>
+                {pipelineStatuses.map(({ status, count }) => (
+                  <span key={status} className={styles[status]}>
+                    {count} {count === 1 ? 'PR' : 'PRs'} {pipelineLabels[status]}
+                  </span>
+                ))}
               </span>
             </>
           ) : (
-            '—'
+            <span className={signalStyles.meta}>PR data unavailable</span>
           )}
         </td>
         <td>

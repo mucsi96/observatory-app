@@ -1,6 +1,48 @@
 import { expect, test } from '@playwright/test';
 import { fleetSnapshot } from './fixtures/fleet';
 
+test('PR summaries explain all check states without zero-count status clutter', async ({
+  page,
+}) => {
+  const snapshot = fleetSnapshot();
+  const repo = snapshot.apps[0].repositoryData!;
+  repo.mrs[0].pipeline = 'passed';
+  await page.route('**/api/apps', (route) => route.fulfill({ json: snapshot }));
+  await page.goto('/');
+  const row = page
+    .getByRole('row')
+    .filter({ has: page.getByRole('button', { name: 'Hello', exact: true }) });
+  await expect(row.getByRole('link', { name: '1 open PR', exact: true })).toHaveAttribute(
+    'href',
+    'https://github.com/owner/hello/pulls',
+  );
+  await expect(row.getByText('1 PR with checks passed', { exact: true })).toBeVisible();
+  await expect(row.getByText(/failed checks|checks running/)).toHaveCount(0);
+  await expect(page.getByText('PR data unavailable', { exact: true })).toBeVisible();
+
+  repo.mrs = (['passed', 'failed', 'failed', 'running', 'no checks', 'unknown'] as const).map(
+    (pipeline, index) => ({ ...repo.mrs[0], number: index + 1, pipeline }),
+  );
+  repo.openMRs = repo.mrs.length;
+  await page.getByRole('button', { name: 'Refresh' }).click();
+  await expect(row.getByRole('link', { name: '6 open PRs', exact: true })).toBeVisible();
+  for (const label of [
+    '1 PR with checks passed',
+    '2 PRs with failed checks',
+    '1 PR with checks running',
+    '1 PR with no checks',
+    '1 PR with checks unknown',
+  ]) {
+    await expect(row.getByText(label, { exact: true })).toBeVisible();
+  }
+
+  repo.mrs = [];
+  repo.openMRs = 0;
+  await page.getByRole('button', { name: 'Refresh' }).click();
+  await expect(row.getByRole('link', { name: '0 open PRs', exact: true })).toBeVisible();
+  await expect(row.getByText(/PRs? with/)).toHaveCount(0);
+});
+
 test('storage serves the production React bundle under CSP and fleet interactions work', async ({
   page,
   request,
