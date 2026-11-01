@@ -37,6 +37,8 @@ export function ApplicationRow({ app, expanded, onToggle, now }: Props) {
   const images = [...new Set(app.workloads.flatMap((workload) => workload.images))];
   const deployment = repo?.deployment;
   const activeDeployment = repo?.activeDeployment;
+  const deploying =
+    Boolean(activeDeployment) || app.workloads.some((workload) => workload.status === 'deploying');
   const initials = app.name
     .split(/\s+/)
     .map((word) => word[0])
@@ -44,7 +46,7 @@ export function ApplicationRow({ app, expanded, onToggle, now }: Props) {
     .slice(0, 2);
   return (
     <>
-      <tr className={styles.row}>
+      <tr className={`${styles.row}${deploying ? ` ${styles.deploying}` : ''}`}>
         <th scope="row">
           <div className={styles.name}>
             <span className={styles.icon} aria-hidden="true">

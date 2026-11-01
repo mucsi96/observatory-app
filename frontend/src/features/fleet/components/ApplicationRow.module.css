@@ -2,6 +2,27 @@
   background: color-mix(in srgb, var(--bt-text-default) 4%, transparent);
 }
 
+.deploying {
+  animation: deployment-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes deployment-pulse {
+  0%,
+  100% {
+    background-color: color-mix(in srgb, var(--bt-warn) 3%, transparent);
+  }
+  50% {
+    background-color: color-mix(in srgb, var(--bt-warn) 16%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .deploying {
+    animation: none;
+    background-color: color-mix(in srgb, var(--bt-warn) 10%, transparent);
+  }
+}
+
 .technology {
   min-width: 150px;
   overflow-wrap: anywhere;
