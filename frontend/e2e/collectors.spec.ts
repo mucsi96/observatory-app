@@ -16,6 +16,110 @@ const updated =
   '2026-10-19T04:26:37.1874736Z DEBUG: PR updated...prNo: 42 (repository=o/r, branch=renovate/all)\n2026-10-19T04:26:37.1876455Z INFO: PR updated (repository=o/r, branch=renovate/all)\n2026-10-19T04:26:37.1877000Z        "pr": 42,\n';
 const logLimit = 16 * 1024 * 1024;
 
+for (const status of ['in_progress', 'queued', 'waiting', 'completed']) {
+  test(`delivery pipeline ${status} is visible before the deploy job exists`, async ({
+    observatory,
+    page,
+  }) => {
+    const workflow = 'deploy.production.yml';
+    const app = await observatory({
+      apps: [{ ...descriptor(), deploymentWorkflow: workflow }],
+      github: (event) => {
+        if (event.path === '/repos/o/r/actions/runs') {
+          expect(event.query.get('branch')).toBe('main');
+          return {
+            json: {
+              workflow_runs: [
+                {
+                  id: 4,
+                  path: '.github/workflows/pages.yml',
+                  status: 'in_progress',
+                  event: 'push',
+                },
+                {
+                  id: 3,
+                  path: `.github/workflows/${workflow}`,
+                  status: 'in_progress',
+                  event: 'pull_request',
+                },
+                {
+                  id: 2,
+                  path: `.github/workflows/${workflow}`,
+                  status,
+                  event: 'push',
+                  html_url: 'https://github.com/o/r/actions/runs/2',
+                  updated_at: '2026-10-01T11:00:00Z',
+                },
+                {
+                  id: 1,
+                  path: `.github/workflows/${workflow}`,
+                  status: 'completed',
+                  event: 'push',
+                  updated_at: '2026-10-01T10:00:00Z',
+                },
+              ],
+            },
+          };
+        }
+        if (event.path === '/repos/o/r/actions/runs/2/jobs') {
+          return {
+            json: {
+              jobs: [
+                {
+                  name: 'build-server-image',
+                  status,
+                  html_url: 'https://github.com/o/r/actions/runs/2/job/20',
+                },
+              ],
+            },
+          };
+        }
+        if (event.path === '/repos/o/r/actions/runs/1/jobs') {
+          return {
+            json: {
+              jobs: [
+                {
+                  name: 'deploy',
+                  status: 'completed',
+                  conclusion: 'success',
+                  html_url: 'https://github.com/o/r/actions/runs/1/job/10',
+                },
+              ],
+            },
+          };
+        }
+        return defaultGitHub(event);
+      },
+    });
+    const signal = (await app.snapshot()).apps[0];
+    expect(signal.health).toBe('healthy');
+    expect(signal.repositoryData?.deployment?.status).toBe('success');
+    expect(app.requests.github.some((event) => /\/runs\/(3|4)\/jobs$/.test(event.path))).toBe(
+      false,
+    );
+    await page.goto(app.url);
+    const row = page
+      .getByRole('row')
+      .filter({ has: page.getByRole('button', { name: 'app', exact: true }) });
+    await expect(row.getByRole('link', { name: 'success', exact: true })).toHaveAttribute(
+      'href',
+      'https://github.com/o/r/actions/runs/1/job/10',
+    );
+    if (status === 'completed') {
+      expect(signal.repositoryData?.activeDeployment).toBeNull();
+      await expect(row.getByRole('link', { name: /Deployment pipeline/ })).toHaveCount(0);
+    } else {
+      expect(signal.repositoryData?.activeDeployment?.status).toBe(status);
+      await expect(
+        row.getByRole('link', {
+          name: `Deployment pipeline ${status === 'in_progress' ? 'running' : status}`,
+        }),
+      ).toHaveAttribute('href', 'https://github.com/o/r/actions/runs/2');
+      await expect(row.getByText('healthy', { exact: true })).toBeVisible();
+    }
+  });
+}
+
 test('repository-only entries collect GitHub signals without Kubernetes and expand independently', async ({
   observatory,
   page,

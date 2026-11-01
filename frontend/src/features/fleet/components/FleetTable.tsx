@@ -8,7 +8,7 @@ const columns = [
   'Frontend / Backend',
   'Health',
   'Production version',
-  'Last deployment',
+  'Deployment',
   'Dependency update',
   'MRs / PRs',
   'Issues',

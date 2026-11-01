@@ -36,6 +36,7 @@ export function ApplicationRow({ app, expanded, onToggle, now }: Props) {
   const repo = app.repositoryData;
   const images = [...new Set(app.workloads.flatMap((workload) => workload.images))];
   const deployment = repo?.deployment;
+  const activeDeployment = repo?.activeDeployment;
   const initials = app.name
     .split(/\s+/)
     .map((word) => word[0])
@@ -89,6 +90,19 @@ export function ApplicationRow({ app, expanded, onToggle, now }: Props) {
           )}
         </td>
         <td>
+          {activeDeployment && (
+            <div>
+              <ExternalLink href={activeDeployment.url}>
+                <StatusBadge
+                  status={activeDeployment.status}
+                  label={`Deployment pipeline ${activeDeployment.status === 'in_progress' ? 'running' : activeDeployment.status.replaceAll('_', ' ')}`}
+                />
+              </ExternalLink>
+              <span className={signalStyles.meta}>
+                Builds, tests and rollout · {relativeAge(activeDeployment.updatedAt, now)}
+              </span>
+            </div>
+          )}
           {deployment ? (
             <>
               <ExternalLink href={deployment.url}>

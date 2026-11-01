@@ -91,6 +91,7 @@ pub struct RepositorySignals {
     pub issues: u64,
     pub mrs: Vec<PullRequest>,
     pub deployment: Option<WorkflowRun>,
+    pub active_deployment: Option<WorkflowRun>,
     pub dependency_update: DependencyUpdate,
 }
 

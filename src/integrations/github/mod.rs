@@ -142,12 +142,13 @@ pub async fn repository(
         }
     }
 
-    let deployment = deployment(github, repository, workflow).await?;
+    let (deployment, active_deployment) = deployment(github, repository, workflow).await?;
     Ok(RepositorySignals {
         open_mrs: mrs.len(),
         issues: search.total_count,
         mrs,
         deployment,
+        active_deployment,
         dependency_update: DependencyUpdate::default(),
     })
 }
@@ -204,7 +205,7 @@ async fn deployment(
     github: &GitHubClient,
     repository: &str,
     workflow: &str,
-) -> Result<Option<WorkflowRun>, IntegrationError> {
+) -> Result<(Option<WorkflowRun>, Option<WorkflowRun>), IntegrationError> {
     let workflow = if workflow.is_empty() {
         "pipeline.yml"
     } else {
@@ -216,10 +217,30 @@ async fn deployment(
         &[("branch", "main".into()), ("per_page", "20".into())],
     )
     .await?;
-    for run in runs.workflow_runs {
-        if run.path != format!(".github/workflows/{workflow}") {
-            continue;
-        }
+    let delivery_runs: Vec<_> = runs
+        .workflow_runs
+        .into_iter()
+        .filter(|run| {
+            run.path == format!(".github/workflows/{workflow}")
+                && !matches!(run.event.as_str(), "pull_request" | "pull_request_target")
+        })
+        .collect();
+    // The deploy job may not exist until builds/tests finish. Surface the
+    // enclosing delivery run immediately, independently of the last deploy job.
+    let active_deployment = delivery_runs
+        .iter()
+        .find(|run| {
+            matches!(
+                run.status.as_str(),
+                "queued" | "in_progress" | "waiting" | "requested" | "pending"
+            )
+        })
+        .map(|run| WorkflowRun {
+            status: run.status.clone(),
+            url: run.html_url.clone(),
+            updated_at: run.updated_at.clone(),
+        });
+    for run in delivery_runs {
         for page in 1.. {
             let jobs: Jobs = get(
                 github,
@@ -233,18 +254,21 @@ async fn deployment(
                 .into_iter()
                 .find(|job| matches!(job.name.as_str(), "deploy" | "Deploy"))
             {
-                return Ok(Some(WorkflowRun {
-                    status: run_status(job.status, job.conclusion),
-                    url: job.html_url,
-                    updated_at: run.updated_at,
-                }));
+                return Ok((
+                    Some(WorkflowRun {
+                        status: run_status(job.status, job.conclusion),
+                        url: job.html_url,
+                        updated_at: run.updated_at,
+                    }),
+                    active_deployment,
+                ));
             }
             if count < 100 {
                 break;
             }
         }
     }
-    Ok(None)
+    Ok((None, active_deployment))
 }
 
 // Mutating the result preserves a collected run even if later requests time out.
@@ -445,6 +469,8 @@ struct ApiRun {
     id: u64,
     #[serde(default)]
     path: String,
+    #[serde(default)]
+    event: String,
     #[serde(default)]
     run_attempt: u64,
     #[serde(default)]
