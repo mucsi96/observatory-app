@@ -48,6 +48,7 @@ export const applicationSchema = z.object({
         }),
       ),
       deployment: runSchema.nullable(),
+      activeDeployment: runSchema.nullable().optional(),
       dependencyUpdate: dependencyUpdateSchema.nullable(),
     })
     .nullable(),

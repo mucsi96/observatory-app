@@ -175,6 +175,10 @@ after application verification and does not affect the captured pixels.
   branch workflow runs, restricted to `pipeline.yml` to exclude Pages deployments.
   App descriptors can override `deploymentWorkflow`. An absent job is shown as
   no recent deploy data. This repository uses the same `pipeline.yml` convention.
+  The same column also shows a linked **Deployment pipeline running/queued/waiting**
+  badge for active delivery runs, including builds and tests before a `deploy` job
+  exists. The latest deploy-job result remains visible underneath. Pull-request
+  runs and unrelated workflows are excluded; Kubernetes health remains independent.
 - **MRs / PRs:** all open GitHub PRs (paginated), including drafts. Checks and legacy
   commit statuses are combined for the current head SHA. Failures take precedence
   over running checks; no checks is distinct from passed; API errors are unknown.
