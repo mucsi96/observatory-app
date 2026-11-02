@@ -201,18 +201,21 @@ jobs:
           AZURE_KEYVAULT_NAME: ${{ secrets.AZURE_KEYVAULT_NAME }}
         run: |
           storage=$(az keyvault secret show --vault-name "$AZURE_KEYVAULT_NAME" --name client-storage-config --query value -o tsv)
-          node frontend/scripts/static-client.mjs client-static client-publish "$(jq -er '.assets_base_url' <<< "$storage")"
+          asset_prefix="releases/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          node frontend/scripts/static-client.mjs client-static client-publish "$(jq -er '.assets_base_url' <<< "$storage")${asset_prefix}/"
+          echo "asset_prefix=$asset_prefix" >> "$GITHUB_OUTPUT"
           echo "account=$(jq -er '.account_name' <<< "$storage")" >> "$GITHUB_OUTPUT"
       - name: Publish assets before index
         uses: azure/cli@v2
         env:
           STORAGE_ACCOUNT: ${{ steps.client.outputs.account }}
+          ASSET_PREFIX: ${{ steps.client.outputs.asset_prefix }}
         with:
           inlineScript: |
             set -euo pipefail
             az storage blob upload-batch --auth-mode login --account-name "$STORAGE_ACCOUNT" \
-              --destination assets --source client-publish/assets --overwrite true \
-              --content-cache-control no-cache --only-show-errors --output none
+              --destination assets --destination-path "$ASSET_PREFIX" --source client-publish/assets --overwrite true \
+              --content-cache-control 'public, max-age=31536000, immutable' --only-show-errors --output none
             az storage blob upload --auth-mode login --account-name "$STORAGE_ACCOUNT" \
               --container-name '$web' --name index.html --file client-publish/documents/index.html \
               --overwrite true --content-type text/html --content-cache-control no-store \
