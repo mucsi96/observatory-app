@@ -170,7 +170,9 @@ after application verification and does not affect the captured pixels.
   are degraded, empty namespaces are not deployed, API failures are unknown.
   Health means Kubernetes readiness, not an external synthetic uptime probe.
 - **Production version:** Deployment container image tags/digests, with separate
-  frontend/backend images. Expand a row for full image references.
+  frontend/backend images. Expand a row for full image references. OAuth2 Proxy
+  images are hidden from both version displays; their workloads still contribute
+  to health and show readiness in the expanded details.
 - **Last deployment:** the most recent `deploy` job found in the latest 20 main
   branch workflow runs, restricted to `pipeline.yml` to exclude Pages deployments.
   App descriptors can override `deploymentWorkflow`. An absent job is shown as

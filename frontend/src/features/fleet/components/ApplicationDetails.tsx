@@ -2,7 +2,7 @@ import { Alert, Heading } from '@mucsi96/react-ui';
 import { ExternalLink } from '../../../components/ExternalLink';
 import { StatusBadge } from '../../../components/StatusBadge';
 import type { ApplicationSignals } from '../schema';
-import { applicationKey } from '../selectors';
+import { applicationImages, applicationKey } from '../selectors';
 import styles from './ApplicationDetails.module.css';
 import signalStyles from './Signal.module.css';
 
@@ -29,7 +29,7 @@ export function ApplicationDetails({ app }: { app: ApplicationSignals }) {
                     <span className={signalStyles.meta}>
                       {workload.ready} / {workload.desired} replicas available
                     </span>
-                    {[...new Set(workload.images)].map((image) => (
+                    {applicationImages(workload.images).map((image) => (
                       <code className={signalStyles.version} key={image}>
                         {image}
                       </code>

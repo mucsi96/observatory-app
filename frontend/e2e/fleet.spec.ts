@@ -1,6 +1,52 @@
 import { expect, test } from '@playwright/test';
 import { fleetSnapshot } from './fixtures/fleet';
 
+test('OAuth2 Proxy versions are hidden while application images and proxy readiness remain visible', async ({
+  page,
+}) => {
+  const snapshot = fleetSnapshot();
+  const app = snapshot.apps[0];
+  const proxyImages = [
+    'quay.io/oauth2-proxy/oauth2-proxy:v7.8.0',
+    'registry.example.com:5000/mirror/oauth2-proxy@sha256:abcdef1234567890abcdef',
+    'oauth2-proxy:v7.9.0',
+    'oauth2-proxy',
+  ];
+  const applicationImage = 'ghcr.io/owner/oauth2-proxy-helper:app-42';
+  app.workloads[0].images.push(proxyImages[0], applicationImage);
+  app.health = 'degraded';
+  app.workloads.push({
+    name: 'hello-auth',
+    ready: 0,
+    desired: 1,
+    status: 'deploying',
+    images: proxyImages,
+  });
+  await page.route('**/api/apps', (route) => route.fulfill({ json: snapshot }));
+  await page.goto('/');
+  const row = page
+    .getByRole('row')
+    .filter({ has: page.getByRole('button', { name: 'Hello', exact: true }) });
+  await expect(row.locator('code')).toHaveText(['sha-123', 'app-42']);
+  await expect(row.getByText('degraded', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Hello', exact: true }).click();
+  const workloads = page.getByRole('region', { name: 'Hello workloads' });
+  await expect(workloads.locator('code')).toHaveText([
+    'ghcr.io/owner/hello:sha-123',
+    applicationImage,
+  ]);
+  await expect(workloads.getByText('hello-auth', { exact: false })).toBeVisible();
+  await expect(workloads.getByText('0 / 1 replicas available')).toBeVisible();
+  await expect(workloads.getByText('deploying', { exact: true })).toBeVisible();
+
+  app.workloads = [app.workloads[1]];
+  await page.getByRole('button', { name: 'Refresh' }).click();
+  await expect(row.getByText('Not available', { exact: true })).toBeVisible();
+  await expect(row.locator('code')).toHaveCount(0);
+  await expect(workloads.locator('code')).toHaveCount(0);
+  await expect(workloads.getByText('0 / 1 replicas available')).toBeVisible();
+});
+
 test('each PR has its own accessible linked status icon without counts', async ({ page }) => {
   const snapshot = fleetSnapshot();
   const repo = snapshot.apps[0].repositoryData!;

@@ -11,7 +11,7 @@ import {
 import { ExternalLink } from '../../../components/ExternalLink';
 import { StatusBadge } from '../../../components/StatusBadge';
 import type { ApplicationSignals } from '../schema';
-import { applicationKey, imageVersion, relativeAge } from '../selectors';
+import { applicationImages, applicationKey, imageVersion, relativeAge } from '../selectors';
 import { ApplicationDetails } from './ApplicationDetails';
 import { DependencySignal } from './DependencySignal';
 import styles from './ApplicationRow.module.css';
@@ -34,7 +34,7 @@ const pipelineStatuses = {
 
 export function ApplicationRow({ app, expanded, onToggle, now }: Props) {
   const repo = app.repositoryData;
-  const images = [...new Set(app.workloads.flatMap((workload) => workload.images))];
+  const images = applicationImages(app.workloads.flatMap((workload) => workload.images));
   const deployment = repo?.deployment;
   const activeDeployment = repo?.activeDeployment;
   const deploying =
