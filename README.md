@@ -247,8 +247,9 @@ Runtime GitHub credentials stay in the platform-managed Kubernetes Secret.
 The client builds directly with Node/npm. The tested `frontend/dist` artifact is
 prepared by `frontend/scripts/static-client.mjs`, preserving bundle bytes while
 making HTML asset URLs absolute. Official `azure/login` and `azure/cli` actions
-batch-upload assets with Entra authentication, then publish index last. Old bundles
-are retained. No Python upload script or client Docker build is involved.
+empty `$web` and `assets`, batch-upload the latest assets with Entra authentication
+and one-year caching, then publish index last with `no-store`. Downtime is intentional;
+old bundles are removed. No Python upload script or client Docker build is involved.
 The deploy identity has separately scoped upload permissions for `$web` and
 `assets`. Azure website endpoints do not support CORS; browser requests use Blob.
 
@@ -277,8 +278,8 @@ contains public build content, not protected application data.
 The hosting/auth deployment secrets are `forward-auth-config` (the shared `.auth`
 reference) and
 `client-storage-config` (account, document hostname and asset base URL). All
-pipelines test the static artifact, upload assets first and index last, and retain
-old bundles. Terraform owns storage/CORS/upload permissions and the proxy; app
+pipelines test the static artifact, empty both static containers, then upload
+the latest assets first and index last. Terraform owns storage/CORS/upload permissions and the proxy; app
 charts own routes and authentication middleware.
 
 Backend authorization remains stack-specific: Observatory validates JWTs on its

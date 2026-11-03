@@ -210,9 +210,13 @@ jobs:
         with:
           inlineScript: |
             set -euo pipefail
+            az storage blob delete-batch --auth-mode login --account-name "$STORAGE_ACCOUNT" \
+              --source '$web' --only-show-errors --output none
+            az storage blob delete-batch --auth-mode login --account-name "$STORAGE_ACCOUNT" \
+              --source assets --only-show-errors --output none
             az storage blob upload-batch --auth-mode login --account-name "$STORAGE_ACCOUNT" \
               --destination assets --source client-publish/assets --overwrite true \
-              --content-cache-control no-cache --only-show-errors --output none
+              --content-cache-control 'public, max-age=31536000, immutable' --only-show-errors --output none
             az storage blob upload --auth-mode login --account-name "$STORAGE_ACCOUNT" \
               --container-name '$web' --name index.html --file client-publish/documents/index.html \
               --overwrite true --content-type text/html --content-cache-control no-store \
