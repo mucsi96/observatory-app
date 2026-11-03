@@ -74,6 +74,13 @@ export function relativeAge(date: string, now: number) {
   return `${Math.floor(minutes / 1440)}d ago`;
 }
 
+export function applicationImages(images: string[]) {
+  return [...new Set(images)].filter((image) => {
+    const name = image.slice(image.lastIndexOf('/') + 1).split(/[:@]/)[0];
+    return name !== 'oauth2-proxy';
+  });
+}
+
 export function imageVersion(image: string) {
   if (image.includes('@')) return image.split('@')[1].slice(0, 19);
   const name = image.slice(image.lastIndexOf('/') + 1);
