@@ -1,0 +1,15 @@
+logger:
+  enable: true
+  level: info
+  format: json
+server:
+  binding: 0.0.0.0
+  port: 8080
+  host: http://localhost
+  middlewares:
+    etag:
+      enable: false
+    fallback:
+      enable: false
+workers:
+  mode: BackgroundAsync

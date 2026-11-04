@@ -22,7 +22,7 @@ the application and served locally by Rust.
 
 React Aria Components 1.22.1 uses React Aria helpers that inject two static style
 blocks: press-target touch behavior and mobile WebKit overlay scroll containment.
-`src/web.rs` permits only their exact SHA-256 hashes in `style-src`; scripts remain
+`src/controllers/mod.rs` permits only their exact SHA-256 hashes in `style-src`; scripts remain
 restricted to self and arbitrary inline styles remain blocked.
 
 WebKit also emits an inline `text-overflow:inherit` compatibility probe. A separate
