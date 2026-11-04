@@ -185,6 +185,9 @@ after application verification and does not affect the captured pixels.
   commit statuses are combined for the current head SHA. Failures take precedence
   over running checks; no checks is distinct from passed; API errors are unknown.
 - **Issues:** open GitHub issues excluding PRs. Incomplete searches are rejected.
+  Each app with a repository has a **New issue** link in its Issues column. It opens
+  GitHub's issue template chooser in a new tab, where you can compose and submit an
+  issue using your GitHub account, even when repository signals are unavailable.
 - **Dependency update:** latest run of `update_dependencies.yml`, the fleet's
   self-hosted Renovate workflow, with its status, timestamp and run link. Workflow
   discovery is paginated and its history is queried directly so weekly runs are

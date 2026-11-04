@@ -160,6 +160,14 @@ export function ApplicationRow({ app, expanded, onToggle, now }: Props) {
           ) : (
             '—'
           )}
+          {app.repository && (
+            <ExternalLink
+              href={`https://github.com/${app.repository}/issues/new/choose`}
+              className={styles.newIssue}
+            >
+              New issue ↗
+            </ExternalLink>
+          )}
         </td>
       </tr>
       {expanded && <ApplicationDetails app={app} />}

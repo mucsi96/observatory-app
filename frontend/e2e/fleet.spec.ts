@@ -1,6 +1,50 @@
 import { expect, test } from '@playwright/test';
 import { fleetSnapshot } from './fixtures/fleet';
 
+test('new issues open the app repository chooser even when collection is unavailable', async ({
+  page,
+  context,
+}) => {
+  const snapshot = fleetSnapshot();
+  snapshot.apps.push(
+    { ...snapshot.apps[1], name: 'Repository only', namespace: '', repository: 'owner/tools' },
+    { ...snapshot.apps[1], name: 'No repository', namespace: 'no-repo', repository: '' },
+  );
+  await page.route('**/api/apps', (route) => route.fulfill({ json: snapshot }));
+  await context.route('https://github.com/**', (route) =>
+    route.fulfill({ contentType: 'text/html', body: '<h1>New issue</h1>' }),
+  );
+  await page.goto('/');
+  for (const [name, repository] of [
+    ['Hello', 'owner/hello'],
+    ['Language', 'owner/language'],
+    ['Repository only', 'owner/tools'],
+  ]) {
+    const row = page
+      .getByRole('row')
+      .filter({ has: page.getByRole('button', { name, exact: true }) });
+    const link = row.getByRole('link', { name: 'New issue ↗', exact: true });
+    await expect(link).toBeVisible();
+    await expect(link).toHaveAttribute(
+      'href',
+      `https://github.com/${repository}/issues/new/choose`,
+    );
+    await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    await link.focus();
+    const popupPromise = page.waitForEvent('popup');
+    await link.press('Enter');
+    const popup = await popupPromise;
+    await expect(popup).toHaveURL(`https://github.com/${repository}/issues/new/choose`);
+    await popup.close();
+    await expect(row.getByRole('button')).toHaveAttribute('aria-expanded', 'false');
+  }
+  await expect(page.getByRole('link', { name: 'New issue ↗', exact: true })).toHaveCount(3);
+  await expect(page.getByRole('link', { name: '3', exact: true })).toHaveAttribute(
+    'href',
+    'https://github.com/owner/hello/issues',
+  );
+});
+
 test('OAuth2 Proxy versions are hidden while application images and proxy readiness remain visible', async ({
   page,
 }) => {
