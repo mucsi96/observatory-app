@@ -18,6 +18,8 @@ export interface AppDescriptor {
 }
 
 export interface UpstreamRequest {
+  method?: string;
+  body?: string;
   path: string;
   query: URLSearchParams;
   authorization: string | undefined;
@@ -35,6 +37,7 @@ export interface UpstreamResponse {
 export type Handler = (request: UpstreamRequest) => UpstreamResponse | Promise<UpstreamResponse>;
 
 interface Options {
+  githubToken?: string;
   apps?: AppDescriptor[];
   github?: Handler;
   kubernetes?: Handler;
@@ -207,7 +210,11 @@ async function startObservatory(
   function upstream(kind: keyof typeof requests, handler: Handler) {
     return createHttpsServer(tls, async (incoming: IncomingMessage, response: ServerResponse) => {
       const url = new URL(incoming.url ?? '/', 'https://localhost');
+      const chunks = [];
+      for await (const chunk of incoming) chunks.push(Buffer.from(chunk));
       const event = {
+        method: incoming.method,
+        body: Buffer.concat(chunks).toString(),
         path: url.pathname,
         query: url.searchParams,
         authorization: incoming.headers.authorization,
@@ -246,7 +253,7 @@ async function startObservatory(
         OIDC_ISSUER: 'http://127.0.0.1:9180/default',
         API_CLIENT_ID: 'observatory-test-api',
         LISTEN_ADDR: new URL(url).host,
-        GITHUB_TOKEN: 'github-private-token',
+        GITHUB_TOKEN: options.githubToken ?? 'github-private-token',
         GITHUB_API_URL: githubUrl,
         GITHUB_CA_FILE: caFile,
         KUBERNETES_API_URL: kubeUrl,

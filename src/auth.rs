@@ -87,7 +87,7 @@ impl Auth {
         })))
     }
 
-    async fn verify(&self, token: &str) -> Result<(), StatusCode> {
+    async fn verify(&self, token: &str, mutation: bool) -> Result<(), StatusCode> {
         let header = decode_header(token).map_err(|_| StatusCode::UNAUTHORIZED)?;
         if header.alg != Algorithm::RS256 {
             return Err(StatusCode::UNAUTHORIZED);
@@ -123,6 +123,7 @@ impl Auth {
             .claims;
         if !claims.scp.split_whitespace().any(|s| s == "api-access")
             || !claims.roles.iter().any(|r| r == "readApps")
+            || (mutation && !claims.roles.iter().any(|r| r == "createIssues"))
         {
             return Err(StatusCode::FORBIDDEN);
         }
@@ -141,6 +142,7 @@ pub async fn authorize(
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.strip_prefix("Bearer "))
         .ok_or(StatusCode::UNAUTHORIZED)?;
-    auth.verify(token).await?;
+    auth.verify(token, request.method() == axum::http::Method::POST)
+        .await?;
     Ok(next.run(request).await)
 }

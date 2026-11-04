@@ -1,0 +1,17 @@
+.trigger {
+  display: block;
+  padding: 6px 0;
+  min-height: 32px;
+  white-space: nowrap;
+}
+
+.form {
+  display: grid;
+  gap: 16px;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}

@@ -18,7 +18,7 @@ const jwk = { ...publicKey.export({ format: 'jwk' }), kid: 'test-key', alg: 'RS2
 const encode = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
 function token(overrides = {}) {
   const now = Math.floor(Date.now() / 1000);
-  const input = `${encode({ alg: 'RS256', kid: 'test-key' })}.${encode({ iss: issuer, aud: 'observatory-test-api', sub: 'test-user', exp: now + 600, nbf: now - 5, scp: 'api-access', roles: ['readApps'], ...overrides })}`;
+  const input = `${encode({ alg: 'RS256', kid: 'test-key' })}.${encode({ iss: issuer, aud: 'observatory-test-api', sub: 'test-user', exp: now + 600, nbf: now - 5, scp: 'api-access', roles: ['readApps', 'createIssues'], ...overrides })}`;
   return `${input}.${sign('RSA-SHA256', Buffer.from(input), privateKey).toString('base64url')}`;
 }
 const identity = createServer((req, res) => {

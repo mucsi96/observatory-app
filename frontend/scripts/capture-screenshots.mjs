@@ -102,6 +102,19 @@ try {
     fullPage: true,
     animations: 'disabled',
   });
+  await page.getByRole('button', { name: 'Add issue', exact: true }).first().click();
+  await page.getByRole('textbox', { name: 'Title' }).fill('Improve the greeting');
+  await page
+    .getByRole('textbox', { name: 'Description' })
+    .fill(
+      'Show a helpful greeting when a new user opens the application.\n\nInclude a link to the getting-started guide.',
+    );
+  await page.screenshot({
+    path: `${output}/add-issue-desktop.png`,
+    fullPage: false,
+    animations: 'disabled',
+  });
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await page.getByRole('button', { name: 'Hello', exact: true }).click();
   await page
     .getByText('ghcr.io/owner/hello:sha-123', { exact: true })
@@ -139,6 +152,21 @@ try {
     fullPage: true,
     animations: 'disabled',
   });
+  await page.getByRole('button', { name: 'Add issue', exact: true }).first().click();
+  await page.getByRole('textbox', { name: 'Title' }).fill('Improve the greeting');
+  await page
+    .getByRole('textbox', { name: 'Description' })
+    .fill('Show a helpful greeting for new users.');
+  assert(
+    await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    'Issue dialog has mobile overflow',
+  );
+  await page.screenshot({
+    path: `${output}/add-issue-mobile.png`,
+    fullPage: false,
+    animations: 'disabled',
+  });
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   assert.deepEqual(errors, []);
   console.log(
     'Captured desktop, expanded-row, mobile, and filter-menu screenshots without browser errors.',

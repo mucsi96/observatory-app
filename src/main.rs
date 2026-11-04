@@ -56,6 +56,7 @@ async fn main() -> anyhow::Result<()> {
     .await?;
     let (sender, snapshots) = watch::channel(None);
     let stop = CancellationToken::new();
+    let router = web::router(snapshots, auth, &config, github.clone());
     let collection = tokio::spawn(collector::run(config, kube, github, sender, stop.clone()));
     let shutdown_token = stop.clone();
     let signals = tokio::spawn(async move {
@@ -63,7 +64,7 @@ async fn main() -> anyhow::Result<()> {
         shutdown_token.cancel();
     });
     tracing::info!(%addr, "Observatory listening");
-    let server = axum::serve(listener, web::router(snapshots, auth))
+    let server = axum::serve(listener, router)
         .with_graceful_shutdown(stop.clone().cancelled_owned())
         .into_future();
     tokio::pin!(server);
