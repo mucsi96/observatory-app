@@ -72,13 +72,6 @@
   color: var(--bt-link);
 }
 
-.newIssue {
-  display: block;
-  width: fit-content;
-  padding-block: 6px;
-  white-space: nowrap;
-}
-
 .pipelineStatuses {
   display: flex;
   flex-wrap: wrap;

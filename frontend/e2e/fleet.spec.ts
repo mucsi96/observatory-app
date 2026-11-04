@@ -1,9 +1,8 @@
 import { expect, test } from '@playwright/test';
 import { fleetSnapshot } from './fixtures/fleet';
 
-test('new issues open the app repository chooser even when collection is unavailable', async ({
+test('issue dialogs work without collection data and preserve drafts on errors', async ({
   page,
-  context,
 }) => {
   const snapshot = fleetSnapshot();
   snapshot.apps.push(
@@ -11,38 +10,63 @@ test('new issues open the app repository chooser even when collection is unavail
     { ...snapshot.apps[1], name: 'No repository', namespace: 'no-repo', repository: '' },
   );
   await page.route('**/api/apps', (route) => route.fulfill({ json: snapshot }));
-  await context.route('https://github.com/**', (route) =>
-    route.fulfill({ contentType: 'text/html', body: '<h1>New issue</h1>' }),
-  );
+  let failure = true;
+  const submissions: unknown[] = [];
+  await page.route('**/api/issues', async (route) => {
+    submissions.push(route.request().postDataJSON());
+    expect(route.request().headers()['x-observatory-request']).toBe('create-issue');
+    await route.fulfill(
+      failure
+        ? { status: 502, json: { error: 'GitHub denied issue creation.' } }
+        : { status: 201, json: { number: 42, url: 'https://github.com/owner/tools/issues/42' } },
+    );
+  });
   await page.goto('/');
-  for (const [name, repository] of [
-    ['Hello', 'owner/hello'],
-    ['Language', 'owner/language'],
-    ['Repository only', 'owner/tools'],
-  ]) {
+  for (const name of ['Hello', 'Language', 'Repository only']) {
     const row = page
       .getByRole('row')
       .filter({ has: page.getByRole('button', { name, exact: true }) });
-    const link = row.getByRole('link', { name: 'New issue ↗', exact: true });
-    await expect(link).toBeVisible();
-    await expect(link).toHaveAttribute(
-      'href',
-      `https://github.com/${repository}/issues/new/choose`,
-    );
-    await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
-    await link.focus();
-    const popupPromise = page.waitForEvent('popup');
-    await link.press('Enter');
-    const popup = await popupPromise;
-    await expect(popup).toHaveURL(`https://github.com/${repository}/issues/new/choose`);
-    await popup.close();
-    await expect(row.getByRole('button')).toHaveAttribute('aria-expanded', 'false');
+    const button = row.getByRole('button', { name: 'Add issue', exact: true });
+    await button.focus();
+    await button.press('Enter');
+    const dialog = page.getByRole('dialog', { name: `Add issue for ${name}` });
+    await expect(dialog.getByRole('textbox', { name: 'Title' })).toBeFocused();
+    await expect(dialog.getByRole('button', { name: 'Add', exact: true })).toBeDisabled();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await expect(button).toBeFocused();
   }
-  await expect(page.getByRole('link', { name: 'New issue ↗', exact: true })).toHaveCount(3);
+  await expect(page.getByRole('button', { name: 'Add issue', exact: true })).toHaveCount(3);
   await expect(page.getByRole('link', { name: '3', exact: true })).toHaveAttribute(
     'href',
     'https://github.com/owner/hello/issues',
   );
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: 'Add issue', exact: true }).last().click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('textbox', { name: 'Title' }).fill('  Fix the app  ');
+  await dialog
+    .getByRole('textbox', { name: 'Description' })
+    .fill('Steps to reproduce\n**Details**');
+  await dialog.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toContainText('GitHub denied');
+  await expect(dialog.getByRole('textbox', { name: 'Title' })).toHaveValue('  Fix the app  ');
+  await expect(dialog.getByRole('textbox', { name: 'Description' })).toHaveValue(
+    'Steps to reproduce\n**Details**',
+  );
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  failure = false;
+  await dialog.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(dialog.getByRole('status')).toContainText('Issue #42 created');
+  expect(submissions).toEqual(
+    Array(2).fill({
+      repository: 'owner/tools',
+      title: 'Fix the app',
+      description: 'Steps to reproduce\n**Details**',
+    }),
+  );
+  await dialog.getByRole('button', { name: 'Done' }).click();
+  await expect(dialog).toHaveCount(0);
 });
 
 test('OAuth2 Proxy versions are hidden while application images and proxy readiness remain visible', async ({

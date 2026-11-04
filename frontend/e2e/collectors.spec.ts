@@ -16,6 +16,120 @@ const updated =
   '2026-10-19T04:26:37.1874736Z DEBUG: PR updated...prNo: 42 (repository=o/r, branch=renovate/all)\n2026-10-19T04:26:37.1876455Z INFO: PR updated (repository=o/r, branch=renovate/all)\n2026-10-19T04:26:37.1877000Z        "pr": 42,\n';
 const logLimit = 16 * 1024 * 1024;
 
+test('issue dialog submits through the real authenticated API with server-side credentials', async ({
+  observatory,
+  page,
+  request,
+}) => {
+  let status = 403;
+  let release: (() => void) | undefined;
+  const app = await observatory({
+    github: async (event) => {
+      if (event.method === 'POST') {
+        expect(event.path).toBe('/repos/o/r/issues');
+        expect(event.authorization).toBe('Bearer github-private-token');
+        expect(JSON.parse(event.body!)).toEqual({
+          title: 'Fix app',
+          body: 'Description\n**Markdown**',
+        });
+        if (status === 201)
+          await new Promise<void>((resolve) => {
+            release = resolve;
+          });
+        return {
+          status,
+          json:
+            status === 201
+              ? { number: 42 }
+              : { message: 'secret github-private-token upstream details' },
+        };
+      }
+      return defaultGitHub(event);
+    },
+  });
+  await app.snapshot();
+  await page.goto(app.url);
+  await page.getByRole('button', { name: 'Add issue', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('textbox', { name: 'Title' }).fill('  Fix app  ');
+  await dialog.getByRole('textbox', { name: 'Description' }).fill('Description\n**Markdown**');
+  await dialog.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toContainText('GitHub denied issue creation');
+  await expect(page.locator('body')).not.toContainText('github-private-token');
+  status = 201;
+  await dialog.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(dialog.getByRole('button', { name: 'Adding…' })).toBeDisabled();
+  await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeVisible();
+  await expect.poll(() => Boolean(release)).toBe(true);
+  release!();
+  await expect(dialog.getByRole('status')).toContainText('Issue #42 created');
+  await expect(dialog.getByRole('link', { name: 'View issue #42 ↗' })).toHaveAttribute(
+    'href',
+    'https://github.com/o/r/issues/42',
+  );
+  expect(app.requests.github.filter((event) => event.method === 'POST')).toHaveLength(2);
+  const headers = { 'X-Observatory-Request': 'create-issue' };
+  for (const data of [
+    { repository: 'other/repo', title: 'Fix app', description: '' },
+    { repository: 'o/r', title: '  ', description: '' },
+    { repository: 'o/r', title: 'x'.repeat(257), description: '' },
+    { repository: 'o/r', title: 'Fix app', description: 'x'.repeat(65537) },
+  ]) {
+    expect((await request.post(`${app.url}/api/issues`, { headers, data })).status()).toBe(400);
+  }
+  expect(
+    (
+      await request.post(`${app.url}/api/issues`, {
+        headers,
+        data: { repository: 'o/r', title: 'Fix app', description: 'x'.repeat(140000) },
+      })
+    ).status(),
+  ).toBe(413);
+  expect(app.requests.github.filter((event) => event.method === 'POST')).toHaveLength(2);
+});
+
+test('issue submission sanitizes failures, never follows redirects or retries, and reports missing configuration', async ({
+  observatory,
+  request,
+}) => {
+  let upstreamStatus = 422;
+  const app = await observatory({
+    github: (event) =>
+      event.method === 'POST'
+        ? {
+            status: upstreamStatus,
+            headers: { Location: `${event.logsUrl}/capture` },
+            json: { message: 'private-upstream-details' },
+          }
+        : defaultGitHub(event),
+  });
+  const options = {
+    headers: { 'X-Observatory-Request': 'create-issue' },
+    data: { repository: 'o/r', title: 'Title', description: '' },
+  };
+  for (const [upstream, expected, message] of [
+    [422, 422, 'GitHub rejected'],
+    [429, 429, 'rate limit'],
+    [500, 502, 'Could not confirm'],
+    [302, 502, 'Could not confirm'],
+  ] as const) {
+    upstreamStatus = upstream;
+    const response = await request.post(`${app.url}/api/issues`, options);
+    expect(response.status()).toBe(expected);
+    expect(await response.text()).toContain(message);
+    expect(await response.text()).not.toContain('private-upstream-details');
+  }
+  expect(app.requests.github.filter((event) => event.method === 'POST')).toHaveLength(4);
+  expect(app.requests.logs).toHaveLength(0);
+  const unconfigured = await observatory({ githubToken: '' });
+  const response = await request.post(`${unconfigured.url}/api/issues`, options);
+  expect(response.status()).toBe(503);
+  expect(await response.text()).toContain('Issue creation is not configured');
+  expect(unconfigured.requests.github).toHaveLength(0);
+});
+
 for (const status of ['in_progress', 'queued', 'waiting', 'completed']) {
   test(`delivery pipeline ${status} is visible before the deploy job exists`, async ({
     observatory,

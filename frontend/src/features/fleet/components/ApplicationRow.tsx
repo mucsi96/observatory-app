@@ -13,6 +13,7 @@ import { StatusBadge } from '../../../components/StatusBadge';
 import type { ApplicationSignals } from '../schema';
 import { applicationImages, applicationKey, imageVersion, relativeAge } from '../selectors';
 import { ApplicationDetails } from './ApplicationDetails';
+import { AddIssue } from './AddIssue';
 import { DependencySignal } from './DependencySignal';
 import styles from './ApplicationRow.module.css';
 import signalStyles from './Signal.module.css';
@@ -160,14 +161,7 @@ export function ApplicationRow({ app, expanded, onToggle, now }: Props) {
           ) : (
             '—'
           )}
-          {app.repository && (
-            <ExternalLink
-              href={`https://github.com/${app.repository}/issues/new/choose`}
-              className={styles.newIssue}
-            >
-              New issue ↗
-            </ExternalLink>
-          )}
+          {app.repository && <AddIssue name={app.name} repository={app.repository} />}
         </td>
       </tr>
       {expanded && <ApplicationDetails app={app} />}

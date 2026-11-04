@@ -61,6 +61,11 @@ Runtime settings: `CONFIG_FILE` (default `config.json`), `GITHUB_TOKEN` or
 `GITHUB_TOKEN_FILE`, `LISTEN_ADDR` (default `127.0.0.1:8080`), and `RUST_LOG`.
 `OIDC_ISSUER` and `API_CLIENT_ID` are required. The API validates RS256 signatures,
 issuer, audience, expiry, `api-access` scope and `readApps` role.
+Creating issues additionally requires the `createIssues` app role in the API JWT.
+Provision and assign that role in Entra to issue authors, then refresh their
+Observatory session. The server's `GITHUB_TOKEN`/`GITHUB_TOKEN_FILE` must have
+**Issues: write** permission for each configured repository (and issues enabled).
+Issues are authored by that token's GitHub account; users do not sign in to GitHub.
 
 Inventory entries without a `namespace` track repositories only. Supply `name`,
 `repository` (`owner/repo`) and an HTTPS `url`. PRs, checks, issues and workflow
@@ -120,7 +125,7 @@ this project after building the production image on PRs.
 
 ### Screenshot review
 
-The pipeline captures desktop, expanded-row, mobile, filter-menu, and mobile WebKit
+The pipeline captures desktop, expanded-row, mobile, filter-menu, issue-dialog, and mobile WebKit
 views from the production bundle and uploads them as the `dashboard-screenshots`
 Actions artifact. Captures use illustrative E2E fixture data and are visual-review
 evidence, not live production signals or pixel-diff baselines. Generated images
@@ -133,7 +138,8 @@ npm --prefix frontend exec -- playwright install chromium webkit
 SCREENSHOT_WEBKIT=1 npm --prefix frontend run screenshots
 ```
 
-Without `SCREENSHOT_WEBKIT=1`, the script captures the four Chromium views. The
+Without `SCREENSHOT_WEBKIT=1`, the script captures six Chromium views, including
+desktop and mobile issue dialogs. The
 script starts an isolated Rust server, validates mobile overflow and application
 errors, and exercises touch filtering and disclosure in WebKit. Playwright's
 WebKit screenshot helper injects a temporary `body {}` repaint stylesheet that
@@ -185,9 +191,12 @@ after application verification and does not affect the captured pixels.
   commit statuses are combined for the current head SHA. Failures take precedence
   over running checks; no checks is distinct from passed; API errors are unknown.
 - **Issues:** open GitHub issues excluding PRs. Incomplete searches are rejected.
-  Each app with a repository has a **New issue** link in its Issues column. It opens
-  GitHub's issue template chooser in a new tab, where you can compose and submit an
-  issue using your GitHub account, even when repository signals are unavailable.
+  Each app with a repository has an **Add issue** button in its Issues column. A
+  dialog accepts a required title and optional Markdown description, then submits
+  through the authenticated Observatory API, even when repository signals are
+  unavailable. Errors retain the draft; success shows the created issue number.
+  Counts update with the next collection. Submission is not automatically retried;
+  after an uncertain network outcome, check the repository before trying again.
 - **Dependency update:** latest run of `update_dependencies.yml`, the fleet's
   self-hosted Renovate workflow, with its status, timestamp and run link. Workflow
   discovery is paginated and its history is queried directly so weekly runs are
@@ -219,7 +228,11 @@ errors are independent per app. Credentials are never returned to the browser.
 `GET /healthz` checks the server; `GET /api/apps` returns the latest snapshot (503
 until initial collection completes). Production access uses per-app oauth2-proxy
 ForwardAuth, host-only `__Host-session` cookies, ingress NetworkPolicy and backend
-JWT validation. The read-only API exposes no mutation endpoints.
+JWT validation. `POST /api/issues` additionally requires the `createIssues` role,
+JSON and an `X-Observatory-Request: create-issue` header, rejects cross-origin Fetch
+Metadata, and grants no CORS preflights. It accepts only inventory repositories,
+titles of 1–256 characters and descriptions of at most 64 KiB (128 KiB request
+limit). GitHub credentials and upstream error bodies remain server-side.
 
 ## Independent build and deployment
 
@@ -288,6 +301,6 @@ the latest assets first and index last. Terraform owns storage/CORS/upload permi
 charts own routes and authentication middleware.
 
 Backend authorization remains stack-specific: Observatory validates JWTs on its
-read-only API; Cooking checks JWT roles and mutation Origin; Skeleton uses Spring
+API and issue-creation role; Cooking checks JWT roles and mutation Origin; Skeleton uses Spring
 Security CSRF with Angular XSRF. Observatory additionally retains its strict CSP
 through the shared chart's `contentSecurityPolicy` setting.

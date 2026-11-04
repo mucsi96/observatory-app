@@ -91,6 +91,38 @@ async fn get_body(
     bounded_body(response, limit).await
 }
 
+pub async fn create_issue(
+    github: &GitHubClient,
+    repository: &str,
+    title: &str,
+    body: &str,
+) -> Result<u64, IntegrationError> {
+    if github.token.trim().is_empty() {
+        return Err(IntegrationError::MissingGithubToken);
+    }
+    let response = github
+        .client
+        .post(format!("{}/repos/{repository}/issues", github.base_url))
+        .bearer_auth(github.token.trim())
+        .header(header::ACCEPT, "application/vnd.github+json")
+        .header("X-GitHub-Api-Version", "2022-11-28")
+        .json(&serde_json::json!({ "title": title, "body": body }))
+        .send()
+        .await
+        .map_err(|_| IntegrationError::Unavailable)?;
+    let bytes = bounded_status_body(response, JSON_LIMIT, StatusCode::CREATED).await?;
+    #[derive(Deserialize)]
+    struct CreatedIssue {
+        number: u64,
+    }
+    let issue: CreatedIssue =
+        serde_json::from_slice(&bytes).map_err(|_| IntegrationError::InvalidResponse)?;
+    if issue.number == 0 {
+        return Err(IntegrationError::InvalidResponse);
+    }
+    Ok(issue.number)
+}
+
 pub async fn repository(
     github: &GitHubClient,
     repository: &str,
@@ -398,7 +430,15 @@ pub async fn dependency_logs(
 }
 
 async fn bounded_body(response: Response, limit: usize) -> Result<Vec<u8>, IntegrationError> {
-    if response.status() != StatusCode::OK {
+    bounded_status_body(response, limit, StatusCode::OK).await
+}
+
+async fn bounded_status_body(
+    response: Response,
+    limit: usize,
+    expected: StatusCode,
+) -> Result<Vec<u8>, IntegrationError> {
+    if response.status() != expected {
         return Err(IntegrationError::Http(response.status().as_u16()));
     }
     if response
