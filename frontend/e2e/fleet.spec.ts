@@ -1,6 +1,133 @@
 import { expect, test } from '@playwright/test';
 import { fleetSnapshot } from './fixtures/fleet';
 
+test('pending issue creation prevents duplicate submits and dismissal, then resets on reopen', async ({
+  page,
+}) => {
+  await page.route('**/api/apps', (route) => route.fulfill({ json: fleetSnapshot() }));
+  let release!: () => void;
+  const responseReady = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let submissions = 0;
+  await page.route('**/api/issues', async (route) => {
+    submissions++;
+    await responseReady;
+    await route.fulfill({
+      status: 201,
+      json: { number: 42, url: 'https://github.com/owner/hello/issues/42' },
+    });
+  });
+  await page.goto('/');
+  const trigger = page.getByRole('button', { name: 'Add issue', exact: true }).first();
+  await trigger.click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('textbox', { name: 'Title' }).fill('Fix it');
+  await dialog.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(dialog.getByRole('button', { name: 'Adding…' })).toBeDisabled();
+  await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+  await expect(dialog.getByRole('textbox', { name: 'Title' })).toBeDisabled();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeVisible();
+  // Exercise same-tick form submissions as well as the disabled button.
+  await dialog.locator('form').evaluate((form) => {
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  });
+  release();
+  await expect(dialog.getByRole('status')).toContainText('Issue #42 created');
+  expect(submissions).toBe(1);
+  await dialog.getByRole('button', { name: 'Done' }).click();
+  await trigger.click();
+  await expect(dialog.getByRole('textbox', { name: 'Title' })).toHaveValue('');
+  await expect(dialog.getByRole('button', { name: 'Add', exact: true })).toBeDisabled();
+  await expect(dialog.getByRole('link', { name: /View issue/ })).toHaveCount(0);
+});
+
+for (const scenario of [
+  {
+    name: 'expired session',
+    status: 401,
+    body: '{}',
+    contentType: 'application/json',
+    message: 'Your session expired',
+  },
+  {
+    name: 'missing role',
+    status: 403,
+    body: '{}',
+    contentType: 'application/json',
+    message: 'requires the createIssues role',
+  },
+  {
+    name: 'invalid success',
+    status: 201,
+    body: '{"number":42}',
+    contentType: 'application/json',
+    message: 'avoid a duplicate',
+  },
+  {
+    name: 'malformed JSON',
+    status: 201,
+    body: '{',
+    contentType: 'application/json',
+    message: 'avoid a duplicate',
+  },
+  {
+    name: 'sign-in document',
+    status: 200,
+    body: '<html>Sign in</html>',
+    contentType: 'text/html',
+    message: 'avoid a duplicate',
+  },
+]) {
+  test(`issue creation handles ${scenario.name} without retrying and keeps the draft`, async ({
+    page,
+  }) => {
+    await page.route('**/api/apps', (route) => route.fulfill({ json: fleetSnapshot() }));
+    let submissions = 0;
+    await page.route('**/api/issues', (route) => {
+      submissions++;
+      return route.fulfill(scenario);
+    });
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Add issue', exact: true }).first().click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByRole('textbox', { name: 'Title' }).fill('Keep my draft');
+    await dialog.getByRole('button', { name: 'Add', exact: true }).click();
+    await expect(dialog.getByRole('alert')).toContainText(scenario.message);
+    await expect(dialog.getByRole('textbox', { name: 'Title' })).toHaveValue('Keep my draft');
+    await expect(dialog.getByRole('button', { name: 'Add', exact: true })).toBeEnabled();
+    await page.clock.install();
+    await page.clock.fastForward(30_000);
+    expect(submissions).toBe(1);
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await page.getByRole('button', { name: 'Add issue', exact: true }).first().click();
+    await expect(dialog.getByRole('alert')).toHaveCount(0);
+    await expect(dialog.getByRole('textbox', { name: 'Title' })).toHaveValue('');
+  });
+}
+
+test('API redirects are not followed and issue drafts remain available', async ({ page }) => {
+  await page.route('**/api/apps', (route) => route.fulfill({ json: fleetSnapshot() }));
+  let redirectedRequests = 0;
+  await page.route('**/redirect-target', (route) => {
+    redirectedRequests++;
+    return route.fulfill({ json: {} });
+  });
+  await page.route('**/api/issues', (route) =>
+    route.fulfill({ status: 307, headers: { Location: '/redirect-target' } }),
+  );
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Add issue', exact: true }).first().click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('textbox', { name: 'Title' }).fill('Private draft');
+  await dialog.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toContainText('avoid a duplicate');
+  await expect(dialog.getByRole('textbox', { name: 'Title' })).toHaveValue('Private draft');
+  expect(redirectedRequests).toBe(0);
+});
+
 test('issue dialogs work without collection data and preserve drafts on errors', async ({
   page,
 }) => {

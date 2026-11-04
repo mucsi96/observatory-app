@@ -56,6 +56,11 @@ binds to `0.0.0.0:8080`.
   Observatory's accent tokens; the library stylesheet is imported once in `main.tsx`.
   [Migration notes and reusable component proposals](docs/react-ui-migration.md)
   cover the expandable table and strict CSP integration.
+- Same-origin JSON transport and Zod validation live in `frontend/src/api.ts`;
+  fleet query/mutation hooks own request state and domain errors. See the
+  [React alignment review](docs/react-alignment.md) for component, hosting and
+  reference-stack decisions. Run `npm --prefix frontend run typecheck` for the
+  standalone TypeScript check (also included in `build`).
 
 Runtime settings: `CONFIG_FILE` (default `config.json`), `GITHUB_TOKEN` or
 `GITHUB_TOKEN_FILE`, `LISTEN_ADDR` (default `127.0.0.1:8080`), and `RUST_LOG`.
