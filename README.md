@@ -1,6 +1,6 @@
 # Observatory
 
-A production fleet dashboard built with **Rust and React**. The backend uses Axum,
+A production fleet dashboard built with **Rust and React**. The backend uses Loco, Axum,
 Tokio, Serde, Reqwest, and kube-rs; the frontend uses React, TypeScript, Vite,
 TanStack Query, Zod, and [React UI](https://github.com/mucsi96/react-ui). Entra
 authentication uses the platform's existing OIDC proxy. Build assets are served
@@ -41,9 +41,12 @@ binds to `0.0.0.0:8080`.
 - `src/collector.rs`: bounded async collection, independent per-app signals, and
   an immutable snapshot shared through a Tokio watch channel. There is no database
   or persistent application state to migrate.
-- `src/web.rs`, `src/main.rs`, `src/auth.rs`: authenticated Axum API routes,
-  structured tracing (`RUST_LOG`), and SIGINT/SIGTERM shutdown.
-- Rust modules use free functions with explicit inputs and typed data. Workload
+- `src/app.rs`, `src/main.rs`: native Loco CLI and application hooks, environment
+  configuration, structured tracing (`RUST_LOG`), and bounded SIGINT/SIGTERM shutdown.
+- `src/controllers/`, `src/auth.rs`: thin API controllers and JWT authorization.
+  `src/services/` owns fleet lifecycle and typed issue creation/validation/errors.
+  Loco runs database-free because Observatory has no persisted application data.
+- Rust integrations use free functions with explicit inputs and typed data. Workload
   readiness and dependency evidence are pure transformations; HTTP collection and
   snapshot publication form the async I/O boundary. React uses function components
   and hooks.
@@ -71,6 +74,23 @@ Provision and assign that role in Entra to issue authors, then refresh their
 Observatory session. The server's `GITHUB_TOKEN`/`GITHUB_TOKEN_FILE` must have
 **Issues: write** permission for each configured repository (and issues enabled).
 Issues are authored by that token's GitHub account; users do not sign in to GitHub.
+
+The native server command is `cargo run --locked -- start` (or
+`target/debug/observatory start --environment production`). Run from the repository
+root; Loco loads `config/development.yaml`, `config/test.yaml`, or
+`config/production.yaml`, selected by `--environment` or `LOCO_ENV`. `CONFIG_FOLDER`
+can select another configuration directory. Production logs are JSON; local/test
+logs are compact. `RUST_LOG` overrides the configured log filter. `--help` lists
+native Loco commands, including `routes`.
+
+Typed application settings may be supplied in the YAML `settings` block using
+the field names in `src/settings.rs`; the existing environment variables override
+them. `LISTEN_ADDR` overrides Loco's server binding/port. Inventory remains the
+existing JSON/ConfigMap format, separate from framework configuration. Token-file
+contents take precedence over `GITHUB_TOKEN` and are never placed in Loco settings.
+The container packages the YAML files and runs `start` in the production environment.
+See the [backend alignment review](docs/backend-alignment.md) for reference-stack
+decisions and lifecycle verification.
 
 Inventory entries without a `namespace` track repositories only. Supply `name`,
 `repository` (`owner/repo`) and an HTTPS `url`. PRs, checks, issues and workflow

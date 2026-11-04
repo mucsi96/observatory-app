@@ -1,3 +1,5 @@
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { strToU8, zipSync } from 'fflate';
 import {
   test,
@@ -15,6 +17,70 @@ const created =
 const updated =
   '2026-10-19T04:26:37.1874736Z DEBUG: PR updated...prNo: 42 (repository=o/r, branch=renovate/all)\n2026-10-19T04:26:37.1876455Z INFO: PR updated (repository=o/r, branch=renovate/all)\n2026-10-19T04:26:37.1877000Z        "pr": 42,\n';
 const logLimit = 16 * 1024 * 1024;
+
+test('Loco CLI exposes native commands and rejects invalid runtime settings before serving', () => {
+  const binary = fileURLToPath(new URL('../../target/debug/observatory', import.meta.url));
+  const cwd = fileURLToPath(new URL('../../', import.meta.url));
+  const help = spawnSync(binary, ['--help'], { cwd, encoding: 'utf8' });
+  expect(help.status).toBe(0);
+  expect(help.stdout).toContain('start');
+  expect(help.stdout).toContain('routes');
+  for (const [overrides, message] of [
+    [{ OIDC_ISSUER: '' }, 'OIDC_ISSUER is required'],
+    [{ API_CLIENT_ID: '' }, 'API_CLIENT_ID is required'],
+    [{ GITHUB_API_URL: 'http://github.example' }, 'upstream endpoints must use HTTPS'],
+    [{ LISTEN_ADDR: 'missing-port' }, 'LISTEN_ADDR must contain a host and port'],
+  ] as const) {
+    const result = spawnSync(binary, ['start', '--environment', 'production'], {
+      cwd,
+      encoding: 'utf8',
+      timeout: 5000,
+      env: {
+        ...process.env,
+        OIDC_ISSUER: 'https://issuer.example',
+        API_CLIENT_ID: 'test-api',
+        ...overrides,
+      },
+    });
+    expect(result.error).toBeUndefined();
+    expect(result.status).not.toBe(0);
+    expect(result.stdout + result.stderr).toContain(message);
+  }
+});
+
+test('Loco production lifecycle serves readiness during collection and cancels on SIGTERM', async ({
+  observatory,
+  request,
+}) => {
+  const app = await observatory({
+    environment: 'production',
+    githubTokenFile: 'mounted-github-token',
+    github: () => new Promise(() => {}),
+  });
+  const health = await request.get(`${app.url}/healthz`);
+  expect(health.status()).toBe(200);
+  expect(await health.text()).toBe('ok');
+  const pending = await request.get(`${app.url}/api/apps`);
+  expect(pending.status()).toBe(503);
+  expect(await pending.json()).toEqual({ error: 'Initial collection in progress' });
+  expect(pending.headers()['cache-control']).toBe('no-store');
+  expect(pending.headers()['x-content-type-options']).toBe('nosniff');
+  expect(pending.headers()['referrer-policy']).toBe('no-referrer');
+  expect(pending.headers()['content-security-policy']).toContain("frame-ancestors 'none'");
+  expect(pending.headers().etag).toBeUndefined();
+  await expect.poll(() => app.requests.github.length).toBeGreaterThan(0);
+  expect(
+    app.requests.github.every((event) => event.authorization === 'Bearer mounted-github-token'),
+  ).toBe(true);
+  // Stop while HTTPS upstream calls are pending, rather than waiting for the
+  // 50-second collection deadline or leaving the collector detached.
+  const exit = new Promise<{ code: number | null; signal: string | null }>((resolve) => {
+    app.process.once('exit', (code, signal) => resolve({ code, signal }));
+  });
+  app.process.kill('SIGTERM');
+  await expect.poll(() => app.process.exitCode, { timeout: 5000 }).toBe(0);
+  await expect(exit).resolves.toEqual({ code: 0, signal: null });
+});
 
 test('issue dialog submits through the real authenticated API with server-side credentials', async ({
   observatory,

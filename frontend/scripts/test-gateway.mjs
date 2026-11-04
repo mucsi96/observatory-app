@@ -102,7 +102,11 @@ const backend = image
       ],
       { stdio: 'inherit' },
     )
-  : spawn(`${root}/target/debug/observatory`, [], { env, stdio: 'inherit' });
+  : spawn(`${root}/target/debug/observatory`, ['start', '--environment', 'test'], {
+      cwd: root,
+      env,
+      stdio: 'inherit',
+    });
 function proxy(req, res, target, headers = {}) {
   const upstream = proxyRequest(
     target,

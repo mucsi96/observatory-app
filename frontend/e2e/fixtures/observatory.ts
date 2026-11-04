@@ -37,6 +37,8 @@ export interface UpstreamResponse {
 export type Handler = (request: UpstreamRequest) => UpstreamResponse | Promise<UpstreamResponse>;
 
 interface Options {
+  environment?: 'test' | 'production';
+  githubTokenFile?: string;
   githubToken?: string;
   apps?: AppDescriptor[];
   github?: Handler;
@@ -201,6 +203,9 @@ async function startObservatory(
   const tls = { key: await readFile(keyFile), cert: await readFile(certFile) };
   await writeFile(tokenFile, 'kubernetes-private-token', { mode: 0o600 });
   const configFile = join(directory, 'config.json');
+  const githubTokenFile = join(directory, 'github-token');
+  if (options.githubTokenFile !== undefined)
+    await writeFile(githubTokenFile, options.githubTokenFile, { mode: 0o600 });
   await writeFile(
     configFile,
     JSON.stringify({ environment: 'test', apps: options.apps ?? [descriptor()] }),
@@ -244,9 +249,9 @@ async function startObservatory(
   const url = `http://127.0.0.1:${await availablePort()}`;
   const process = spawn(
     fileURLToPath(new URL('../../../target/debug/observatory', import.meta.url)),
-    [],
+    ['start', '--environment', options.environment ?? 'test'],
     {
-      cwd: fileURLToPath(new URL('../../', import.meta.url)),
+      cwd: fileURLToPath(new URL('../../../', import.meta.url)),
       env: {
         ...globalThis.process.env,
         CONFIG_FILE: configFile,
@@ -254,6 +259,7 @@ async function startObservatory(
         API_CLIENT_ID: 'observatory-test-api',
         LISTEN_ADDR: new URL(url).host,
         GITHUB_TOKEN: options.githubToken ?? 'github-private-token',
+        GITHUB_TOKEN_FILE: options.githubTokenFile === undefined ? undefined : githubTokenFile,
         GITHUB_API_URL: githubUrl,
         GITHUB_CA_FILE: caFile,
         KUBERNETES_API_URL: kubeUrl,

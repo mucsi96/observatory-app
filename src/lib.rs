@@ -1,7 +1,10 @@
+pub mod app;
 pub mod auth;
 pub mod collector;
 pub mod config;
+pub mod controllers;
 pub mod error;
 pub mod integrations;
 pub mod model;
-pub mod web;
+pub mod services;
+pub mod settings;
