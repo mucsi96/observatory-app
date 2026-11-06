@@ -1,12 +1,7 @@
-.topbar {
-  min-height: 82px;
-  padding: 18px 5vw;
-  background: var(--bt-surface-1);
-  border-bottom: 1px solid var(--bt-outline);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+.layout {
+  --bt-app-max-width: 1680px;
+  --bt-app-gutter: 5vw;
+  --bt-app-content-gap: 55px;
 }
 
 .brand {
@@ -36,12 +31,6 @@
   color: var(--bt-text-muted);
   overflow-wrap: anywhere;
   min-width: 0;
-}
-
-.main {
-  max-width: 1680px;
-  margin: auto;
-  padding: 55px 5vw 24px;
 }
 
 .intro {
@@ -171,12 +160,9 @@ h2.fleetTitle {
 }
 
 @media (max-width: 600px) {
-  .main {
-    padding: 32px 20px 20px;
-  }
-
-  .topbar {
-    padding: 16px 20px;
+  .layout {
+    --bt-app-gutter: 20px;
+    --bt-app-content-gap: 32px;
   }
 
   .brand {

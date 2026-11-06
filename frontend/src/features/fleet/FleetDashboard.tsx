@@ -1,5 +1,17 @@
 import { useState } from 'react';
-import { Alert, Badge, Button, Card, Heading, Select, Text, TextField } from '@mucsi96/react-ui';
+import {
+  AppHeader,
+  AppHeaderActions,
+  AppMain,
+  Alert,
+  Badge,
+  Button,
+  Card,
+  Heading,
+  Select,
+  Text,
+  TextField,
+} from '@mucsi96/react-ui';
 import { Diamond, RefreshCw } from 'lucide-react';
 import { useNow } from '../../hooks/useNow';
 import { useFleetSnapshot } from './api';
@@ -41,16 +53,18 @@ export function FleetDashboard() {
   }
 
   return (
-    <>
-      <header className={styles.topbar}>
+    <div className={styles.layout}>
+      <AppHeader>
         <a className={styles.brand} href="/" aria-label="Observatory home">
           <Diamond aria-hidden="true" className={styles.brandMark} size={28} />
           observatory <span className={styles.brandDivider}>/</span>
           <span className={styles.environmentName}>{snapshot?.environment ?? 'connecting'}</span>
         </a>
-        <Badge className={styles.environment}>Production</Badge>
-      </header>
-      <main className={styles.main}>
+        <AppHeaderActions className={styles.environment}>
+          <Badge>Production</Badge>
+        </AppHeaderActions>
+      </AppHeader>
+      <AppMain>
         <section className={styles.intro}>
           <div>
             <Text className={styles.eyebrow}>YOUR APPLICATIONS, AT A GLANCE</Text>
@@ -140,7 +154,7 @@ export function FleetDashboard() {
           </span>
           <span>Rust + React · Shared live fleet signals</span>
         </footer>
-      </main>
-    </>
+      </AppMain>
+    </div>
   );
 }
