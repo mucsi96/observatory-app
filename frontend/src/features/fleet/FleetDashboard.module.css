@@ -30,7 +30,7 @@
 }
 
 .environmentName {
-  font: 12px var(--bt-font-mono);
+  font-size: 12px;
   letter-spacing: 1px;
   text-transform: uppercase;
   color: var(--bt-text-muted);

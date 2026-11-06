@@ -8,7 +8,8 @@
 
 .version {
   display: block;
-  font: 11px / 1.7 var(--bt-font-mono);
+  font-size: 11px;
+  line-height: 1.7;
   color: var(--bt-text-default);
   overflow-wrap: anywhere;
 }

@@ -1,8 +1,4 @@
 :root {
-  --bt-font: system-ui;
-  --bt-font-body: system-ui;
-  --bt-font-mono: system-ui;
-  font-family: system-ui;
   font-synthesis: none;
   color: var(--bt-text-default);
   background: var(--bt-surface-0);
