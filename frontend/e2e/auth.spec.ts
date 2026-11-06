@@ -1,5 +1,4 @@
 import { test, expect } from '@playwright/test';
-import { fleetSnapshot } from './fixtures/fleet';
 
 test('API verifies signatures, issuer, audience, expiry, scope and role', async ({ request }) => {
   const api = 'http://127.0.0.1:8081/api/apps';
