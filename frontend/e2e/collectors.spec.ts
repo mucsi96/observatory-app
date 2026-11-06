@@ -985,13 +985,13 @@ test('invalid application descriptors are rejected at process startup', async ({
   }
 });
 
-test('initial collection returns 503 and browser refresh never triggers upstream calls', async ({
+test('initial collection returns 503, polling reads cache, and refresh collects upstream signals', async ({
   observatory,
   request,
   page,
 }) => {
   let release!: () => void;
-  const waiting = new Promise<void>((resolve) => {
+  let waiting = new Promise<void>((resolve) => {
     release = resolve;
   });
   const app = await observatory({
@@ -1004,13 +1004,38 @@ test('initial collection returns 503 and browser refresh never triggers upstream
   expect(initial.status()).toBe(503);
   expect(initial.headers()['content-type']).toContain('application/json');
   release();
-  await app.snapshot();
+  const before = await app.snapshot();
   const calls = app.requests.github.length + app.requests.kubernetes.length;
+  await request.get(`${app.url}/api/apps`);
+  expect(app.requests.github.length + app.requests.kubernetes.length).toBe(calls);
+  const forbidden = await request.post(`${app.url}/api/apps/refresh`);
+  expect(forbidden.status()).toBe(403);
+  const crossOrigin = await request.post(`${app.url}/api/apps/refresh`, {
+    headers: { 'X-Observatory-Request': 'refresh', 'Sec-Fetch-Site': 'same-site' },
+  });
+  expect(crossOrigin.status()).toBe(403);
+  expect(app.requests.github.length + app.requests.kubernetes.length).toBe(calls);
+  waiting = new Promise<void>((resolve) => {
+    release = resolve;
+  });
   await page.goto(app.url);
   await page.getByRole('button', { name: 'app', exact: true }).waitFor();
+  const refreshed = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/apps/refresh') && response.request().method() === 'POST',
+  );
   await page.getByRole('button', { name: 'Refresh' }).click();
-  await expect(page.getByRole('button', { name: 'Refresh' })).toBeEnabled();
-  expect(app.requests.github.length + app.requests.kubernetes.length).toBe(calls);
+  await expect(page.getByRole('button', { name: 'Refreshing…', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'app', exact: true })).toBeVisible();
+  await expect
+    .poll(() => app.requests.github.length + app.requests.kubernetes.length)
+    .toBeGreaterThan(calls);
+  release();
+  const response = await refreshed;
+  expect(response.status()).toBe(200);
+  expect((await response.json()).updatedAt).not.toBe(before.updatedAt);
+  await expect(page.getByRole('button', { name: 'Refresh', exact: true })).toBeEnabled();
+  expect(app.requests.github.length + app.requests.kubernetes.length).toBeGreaterThan(calls);
 });
 
 test('paginated workflow discovery uses the latest attempt and never forwards credentials to HTTPS log storage', async ({
@@ -1192,6 +1217,7 @@ for (const [name, download] of [
 
 test('the 50-second collection deadline bounds active and queued apps without losing independent Kubernetes signals', async ({
   observatory,
+  request,
 }) => {
   const started = Date.now();
   const app = await observatory({
@@ -1217,7 +1243,20 @@ test('the 50-second collection deadline bounds active and queued apps without lo
       return defaultGitHub(event);
     },
   });
+  // Concurrent refreshes join the slow initial collection and survive its full deadline.
+  const responses = await Promise.all(
+    Array.from({ length: 2 }, () =>
+      request.post(`${app.url}/api/apps/refresh`, {
+        headers: { 'X-Observatory-Request': 'refresh' },
+        timeout: 65_000,
+      }),
+    ),
+  );
   const snapshot = await app.snapshot();
+  for (const response of responses) {
+    expect(response.status()).toBe(200);
+    expect((await response.json()).updatedAt).toBe(snapshot.updatedAt);
+  }
   expect(Date.now() - started).toBeLessThan(60_000);
   expect(snapshot.apps).toHaveLength(8);
   expect(

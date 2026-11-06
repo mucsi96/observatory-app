@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { ApiError, fetchJson } from '../../api';
 import { snapshotSchema } from './schema';
@@ -83,5 +83,35 @@ export function useFleetSnapshot() {
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: 'always',
     retry: false,
+  });
+}
+
+export function useRefreshFleet() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      try {
+        return await fetchJson('/api/apps/refresh', snapshotSchema, {
+          method: 'POST',
+          headers: { 'X-Observatory-Request': 'refresh' },
+          signal: AbortSignal.timeout(65_000),
+        });
+      } catch (error) {
+        if (error instanceof z.ZodError || error instanceof SyntaxError) {
+          throw new Error('The collector returned an invalid snapshot. Please try Refresh again.', {
+            cause: error,
+          });
+        }
+        throw new Error('Could not refresh signals. Please try again or reload to sign in again.', {
+          cause: error,
+        });
+      }
+    },
+    onSuccess: async (snapshot) => {
+      await client.cancelQueries({ queryKey: ['fleet', 'snapshot'] });
+      client.setQueryData(['fleet', 'snapshot'], snapshot);
+    },
+    retry: false,
+    networkMode: 'always',
   });
 }

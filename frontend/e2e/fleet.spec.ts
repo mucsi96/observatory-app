@@ -136,7 +136,7 @@ test('issue dialogs work without collection data and preserve drafts on errors',
     { ...snapshot.apps[1], name: 'Repository only', namespace: '', repository: 'owner/tools' },
     { ...snapshot.apps[1], name: 'No repository', namespace: 'no-repo', repository: '' },
   );
-  await page.route('**/api/apps', (route) => route.fulfill({ json: snapshot }));
+  await page.route(/\/api\/apps(?:\/refresh)?$/, (route) => route.fulfill({ json: snapshot }));
   let failure = true;
   const submissions: unknown[] = [];
   await page.route('**/api/issues', async (route) => {
@@ -217,7 +217,7 @@ test('OAuth2 Proxy versions are hidden while application images and proxy readin
     status: 'deploying',
     images: proxyImages,
   });
-  await page.route('**/api/apps', (route) => route.fulfill({ json: snapshot }));
+  await page.route(/\/api\/apps(?:\/refresh)?$/, (route) => route.fulfill({ json: snapshot }));
   await page.goto('/');
   const row = page
     .getByRole('row')
@@ -246,7 +246,7 @@ test('each PR has its own accessible linked status icon without counts', async (
   const snapshot = fleetSnapshot();
   const repo = snapshot.apps[0].repositoryData!;
   repo.mrs[0].pipeline = 'passed';
-  await page.route('**/api/apps', (route) => route.fulfill({ json: snapshot }));
+  await page.route(/\/api\/apps(?:\/refresh)?$/, (route) => route.fulfill({ json: snapshot }));
   await page.goto('/');
   const row = page
     .getByRole('row')
@@ -334,7 +334,7 @@ test('storage serves the production React bundle under CSP and fleet interaction
 test('mobile layout remains usable and refresh retains data after an error', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   let failing = false;
-  await page.route('**/api/apps', (route) =>
+  await page.route(/\/api\/apps(?:\/refresh)?$/, (route) =>
     route.fulfill(
       failing
         ? { status: 503, json: { error: 'Initial collection in progress' } }
@@ -360,6 +360,9 @@ test('mobile layout remains usable and refresh retains data after an error', asy
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   );
+  failing = false;
+  await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+  await expect(page.getByText(/Showing the last received snapshot/)).toHaveCount(0);
 });
 
 test('stack labels are searchable and missing or partial metadata stays explicit', async ({
@@ -372,7 +375,7 @@ test('stack labels are searchable and missing or partial metadata stays explicit
     namespace: 'legacy',
     stack: { frontend: 'Angular', backend: 'Java' },
   });
-  await page.route('**/api/apps', (route) => route.fulfill({ json: snapshot }));
+  await page.route(/\/api\/apps(?:\/refresh)?$/, (route) => route.fulfill({ json: snapshot }));
   await page.goto('/');
   await expect(page.getByText('Angular / Java', { exact: true })).toBeVisible();
   await expect(page.getByText('Unknown / Unknown', { exact: true })).toBeVisible();
@@ -432,7 +435,7 @@ test('dependency attention reflects evidence separately from workflow success an
   snapshot.apps = [snapshot.apps[0]];
   const repo = snapshot.apps[0].repositoryData!;
   repo.mrs[0].pipeline = 'passed';
-  await page.route('**/api/apps', (route) => route.fulfill({ json: snapshot }));
+  await page.route(/\/api\/apps(?:\/refresh)?$/, (route) => route.fulfill({ json: snapshot }));
   await page.goto('/');
   await page.getByRole('button', { name: /Filter applications/ }).click();
   await page.getByRole('option', { name: 'Needs attention', exact: true }).click();
@@ -519,7 +522,7 @@ test('initial collection recovers, expired sessions and invalid responses retain
   page,
 }) => {
   let mode: 'initial' | 'live' | 'session' | 'invalid' = 'initial';
-  await page.route('**/api/apps', (route) =>
+  await page.route(/\/api\/apps(?:\/refresh)?$/, (route) =>
     route.fulfill(
       mode === 'initial'
         ? { status: 503, json: { error: 'Initial collection in progress' } }

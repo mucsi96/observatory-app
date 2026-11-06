@@ -1,6 +1,9 @@
 use std::{sync::Arc, time::Duration};
 
-use tokio::{sync::watch, task::JoinHandle};
+use tokio::{
+    sync::{mpsc, oneshot, watch},
+    task::JoinHandle,
+};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
@@ -11,6 +14,7 @@ use crate::{
 
 /// One collector per HTTP process, sharing immutable snapshots with all readers.
 pub struct Collection {
+    pub refresh: mpsc::Sender<oneshot::Sender<Arc<crate::model::Snapshot>>>,
     stop: CancellationToken,
     task: JoinHandle<()>,
 }
@@ -23,14 +27,23 @@ impl Collection {
     ) -> (Self, SnapshotReceiver) {
         let (sender, receiver) = watch::channel(None);
         let stop = CancellationToken::new();
+        let (refresh, requests) = mpsc::channel(32);
         let task = tokio::spawn(collector::run(
             inventory,
             kube,
             github,
             sender,
             stop.clone(),
+            requests,
         ));
-        (Self { stop, task }, receiver)
+        (
+            Self {
+                stop,
+                task,
+                refresh,
+            },
+            receiver,
+        )
     }
 
     pub async fn shutdown(mut self) {
@@ -52,6 +65,7 @@ impl Drop for Collection {
 
 #[derive(Clone)]
 pub struct Fleet {
+    pub refresh: mpsc::Sender<oneshot::Sender<Arc<crate::model::Snapshot>>>,
     pub snapshots: SnapshotReceiver,
     pub issues: super::issues::Issues,
 }

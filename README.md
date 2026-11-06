@@ -246,8 +246,11 @@ after application verification and does not affect the captured pixels.
 
 The backend collects up to four apps concurrently, with request timeouts and a
 50-second collection deadline, then waits 60 seconds before collecting again.
-Browsers read the shared snapshot every 15 seconds; Refresh does not trigger new
-upstream calls. Snapshots older than three minutes are stale. Kubernetes and GitHub
+Browsers read the shared snapshot every 15 seconds. Refresh calls authenticated
+`POST /api/apps/refresh` with `X-Observatory-Request: refresh`, triggering immediate
+backend collection and returning the collected snapshot. Concurrent refreshes share
+an in-progress collection. Cross-origin browser requests are rejected. Snapshots
+older than three minutes are stale. Kubernetes and GitHub
 errors are independent per app. Credentials are never returned to the browser.
 
 `GET /healthz` checks the server; `GET /api/apps` returns the latest snapshot (503
