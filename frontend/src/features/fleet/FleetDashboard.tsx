@@ -14,7 +14,7 @@ import {
 } from '@mucsi96/react-ui';
 import { Diamond, RefreshCw } from 'lucide-react';
 import { useNow } from '../../hooks/useNow';
-import { useFleetSnapshot } from './api';
+import { useFleetSnapshot, useRefreshFleet } from './api';
 import { filterApplications, relativeAge, type FleetFilter } from './selectors';
 import { FleetTable } from './components/FleetTable';
 import { FleetSummary } from './components/FleetSummary';
@@ -27,7 +27,9 @@ const filters = [
 ];
 
 export function FleetDashboard() {
-  const { data: snapshot, error, isFetching, refetch } = useFleetSnapshot();
+  const { data: snapshot, error: queryError, isFetching } = useFleetSnapshot();
+  const refresh = useRefreshFleet();
+  const error = refresh.error ?? queryError;
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<FleetFilter>('all');
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
@@ -83,13 +85,17 @@ export function FleetDashboard() {
                 ? `Updated ${relativeAge(snapshot.updatedAt, now)}`
                 : 'Connecting to your fleet…'}
             </span>
-            <Button variant="outlined" onPress={() => void refetch()} isDisabled={isFetching}>
+            <Button
+              variant="outlined"
+              onPress={() => refresh.mutate()}
+              isDisabled={refresh.isPending}
+            >
               <RefreshCw
                 size={15}
                 aria-hidden="true"
-                className={isFetching ? styles.spinning : undefined}
+                className={isFetching || refresh.isPending ? styles.spinning : undefined}
               />{' '}
-              Refresh
+              {refresh.isPending ? 'Refreshing…' : 'Refresh'}
             </Button>
           </div>
         </section>

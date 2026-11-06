@@ -141,17 +141,32 @@ pub async fn run(
     github: GitHubClient,
     snapshots: watch::Sender<Option<Arc<Snapshot>>>,
     stop: CancellationToken,
+    mut requests: tokio::sync::mpsc::Receiver<tokio::sync::oneshot::Sender<Arc<Snapshot>>>,
 ) {
+    let mut waiting: Option<tokio::sync::oneshot::Sender<Arc<Snapshot>>> = None;
     loop {
         let snapshot = tokio::select! {
             _ = stop.cancelled() => break,
             snapshot = collect(&config, &kube, &github, COLLECTION_DEADLINE) => snapshot,
         };
         tracing::info!(apps = snapshot.apps.len(), "fleet snapshot collected");
-        snapshots.send_replace(Some(Arc::new(snapshot)));
+        let snapshot = Arc::new(snapshot);
+        snapshots.send_replace(Some(snapshot.clone()));
+        if let Some(request) = waiting.take() {
+            let _ = request.send(snapshot.clone());
+        }
+        // Requests arriving during collection share its result rather than
+        // starting parallel upstream calls or queuing redundant collections.
+        while let Ok(request) = requests.try_recv() {
+            let _ = request.send(snapshot.clone());
+        }
         tokio::select! {
             _ = stop.cancelled() => break,
             _ = sleep(COLLECTION_INTERVAL) => {}
+            request = requests.recv() => match request {
+                Some(request) => waiting = Some(request),
+                None => break,
+            }
         }
     }
 }

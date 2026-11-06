@@ -21,7 +21,19 @@ pub fn routes(auth: Auth) -> Routes {
     Routes::new()
         .add(
             "/api/apps",
-            get(apps).layer(middleware::from_fn_with_state(
+            get(apps)
+                .layer::<_, std::convert::Infallible>(middleware::from_fn_with_state(
+                    auth.clone(),
+                    auth::authorize,
+                ))
+                .layer(TimeoutLayer::with_status_code(
+                    StatusCode::REQUEST_TIMEOUT,
+                    Duration::from_secs(20),
+                )),
+        )
+        .add(
+            "/api/apps/refresh",
+            post(refresh_apps).layer(middleware::from_fn_with_state(
                 auth.clone(),
                 auth::authorize,
             )),
@@ -30,7 +42,14 @@ pub fn routes(auth: Auth) -> Routes {
             "/api/issues",
             post(create_issue)
                 .layer(DefaultBodyLimit::max(128 * 1024))
-                .layer(middleware::from_fn_with_state(auth, auth::authorize)),
+                .layer::<_, std::convert::Infallible>(middleware::from_fn_with_state(
+                    auth,
+                    auth::authorize_issue,
+                ))
+                .layer(TimeoutLayer::with_status_code(
+                    StatusCode::REQUEST_TIMEOUT,
+                    Duration::from_secs(20),
+                )),
         )
         .get("/healthz", || async { "ok" })
 }
@@ -46,7 +65,8 @@ pub fn middleware(router: Router) -> Router {
         )))
         .layer(SetResponseHeaderLayer::overriding(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff")))
         .layer(SetResponseHeaderLayer::overriding(header::REFERRER_POLICY, HeaderValue::from_static("no-referrer")))
-        .layer(TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, Duration::from_secs(20)))
+        // Manual refresh can wait for the full 50-second collection deadline.
+        .layer(TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, Duration::from_secs(60)))
         .layer(TraceLayer::new_for_http())
 }
 
@@ -62,6 +82,36 @@ async fn apps(Extension(fleet): Extension<Fleet>) -> Response {
             })),
         )
             .into_response(),
+    }
+}
+
+async fn refresh_apps(Extension(fleet): Extension<Fleet>, headers: HeaderMap) -> Response {
+    if headers
+        .get("x-observatory-request")
+        .and_then(|h| h.to_str().ok())
+        != Some("refresh")
+        || headers
+            .get("sec-fetch-site")
+            .is_some_and(|h| h != "same-origin")
+    {
+        return issue_error(
+            StatusCode::FORBIDDEN,
+            "Refresh requires a same-origin dashboard request.",
+        );
+    }
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    if fleet.refresh.try_send(sender).is_err() {
+        return issue_error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Collector is unavailable or busy. Try again shortly.",
+        );
+    }
+    match receiver.await {
+        Ok(snapshot) => Json(&*snapshot).into_response(),
+        Err(_) => issue_error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Collector stopped. Try again shortly.",
+        ),
     }
 }
 

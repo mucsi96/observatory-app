@@ -107,8 +107,13 @@ impl Hooks for App {
             tokio::net::TcpListener::bind(format!("{}:{}", params.binding, params.port)).await?;
         let issues = Issues::new(&inventory, github.clone());
         let (collection, snapshots) = Collection::start(inventory, kube, github);
+        let refresh = collection.refresh.clone();
         ctx.shared_store.insert(collection);
-        let router = router.layer(Extension(Fleet { snapshots, issues }));
+        let router = router.layer(Extension(Fleet {
+            snapshots,
+            issues,
+            refresh,
+        }));
         let shutdown = tokio_util::sync::CancellationToken::new();
         let signal = shutdown.clone();
         let signals = tokio::spawn(async move {

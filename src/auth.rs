@@ -136,13 +136,29 @@ pub async fn authorize(
     request: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
+    authorize_request(auth, request, next, false).await
+}
+
+pub async fn authorize_issue(
+    State(auth): State<Auth>,
+    request: Request,
+    next: Next,
+) -> Result<Response, StatusCode> {
+    authorize_request(auth, request, next, true).await
+}
+
+async fn authorize_request(
+    auth: Auth,
+    request: Request,
+    next: Next,
+    require_issue_role: bool,
+) -> Result<Response, StatusCode> {
     let token = request
         .headers()
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.strip_prefix("Bearer "))
         .ok_or(StatusCode::UNAUTHORIZED)?;
-    auth.verify(token, request.method() == axum::http::Method::POST)
-        .await?;
+    auth.verify(token, require_issue_role).await?;
     Ok(next.run(request).await)
 }

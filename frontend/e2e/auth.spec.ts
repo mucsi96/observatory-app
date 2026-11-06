@@ -80,6 +80,26 @@ test('issue creation requires authentication, write role and CSRF protection', a
   expect(preflight.headers()['access-control-allow-origin']).toBeUndefined();
 });
 
+test('refresh requires read access but not the issue creation role', async ({ request }) => {
+  const api = 'http://127.0.0.1:8081/api/apps/refresh';
+  expect((await request.post(api)).status()).toBe(401);
+  for (const [claims, expected] of [
+    [{ roles: ['readApps'] }, 200],
+    [{ roles: ['createIssues'] }, 403],
+    [{ scp: 'other-scope' }, 403],
+    [{ exp: 1 }, 401],
+  ] as const) {
+    const tokens = await request.get(
+      `http://127.0.0.1:9180/token?claims=${encodeURIComponent(JSON.stringify(claims))}`,
+    );
+    const { access_token } = await tokens.json();
+    const response = await request.post(api, {
+      headers: { Authorization: `Bearer ${access_token}`, 'X-Observatory-Request': 'refresh' },
+    });
+    expect(response.status()).toBe(expected);
+  }
+});
+
 test('built config boots deep links and browser logs use the same origin', async ({ page }) => {
   const environmentRequests: string[] = [];
   page.on('request', (request) => {
