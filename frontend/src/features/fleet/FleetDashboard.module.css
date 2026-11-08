@@ -202,3 +202,6 @@ h2.fleetTitle {
     animation: none;
   }
 }
+.loading {
+  min-block-size: 16rem;
+}
