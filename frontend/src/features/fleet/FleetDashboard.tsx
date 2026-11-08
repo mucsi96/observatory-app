@@ -8,6 +8,7 @@ import {
   Button,
   Card,
   Heading,
+  LoadingArea,
   Select,
   Text,
   TextField,
@@ -27,7 +28,7 @@ const filters = [
 ];
 
 export function FleetDashboard() {
-  const { data: snapshot, error: queryError, isFetching } = useFleetSnapshot();
+  const { data: snapshot, error: queryError, isFetching, isPending } = useFleetSnapshot();
   const refresh = useRefreshFleet();
   const error = refresh.error ?? queryError;
   const [search, setSearch] = useState('');
@@ -80,11 +81,7 @@ export function FleetDashboard() {
             </Text>
           </div>
           <div className={styles.sync}>
-            <span role="status">
-              {snapshot
-                ? `Updated ${relativeAge(snapshot.updatedAt, now)}`
-                : 'Connecting to your fleet…'}
-            </span>
+            {snapshot && <span role="status">Updated {relativeAge(snapshot.updatedAt, now)}</span>}
             <Button
               variant="outlined"
               onPress={() => refresh.mutate()}
@@ -136,19 +133,21 @@ export function FleetDashboard() {
               />
             </div>
           </div>
-          <FleetTable
-            apps={apps}
-            expanded={expanded}
-            onToggle={toggle}
-            now={now}
-            emptyMessage={
-              snapshot
-                ? 'No applications match this view. Try another search or filter.'
-                : error
-                  ? 'Waiting for live data. Use Refresh to try again.'
-                  : 'Gathering signals from your applications…'
-            }
-          />
+          {isPending ? (
+            <LoadingArea label="Gathering fleet signals" className={styles.loading} />
+          ) : (
+            <FleetTable
+              apps={apps}
+              expanded={expanded}
+              onToggle={toggle}
+              now={now}
+              emptyMessage={
+                snapshot
+                  ? 'No applications match this view. Try another search or filter.'
+                  : 'Waiting for live data. Use Refresh to try again.'
+              }
+            />
+          )}
           <Text muted className={styles.tableNote}>
             Health reflects Kubernetes readiness · Versions are deployed container images · Expand
             an app for workload and MR details
