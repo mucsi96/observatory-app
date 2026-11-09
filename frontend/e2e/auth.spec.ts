@@ -10,6 +10,8 @@ test('API verifies signatures, issuer, audience, expiry, scope and role', async 
     [{}, 200],
     [{ iss: 'https://wrong.example' }, 401],
     [{ aud: 'wrong-api' }, 401],
+    [{ aud: ['other-api', 'observatory-test-api'] }, 200],
+    [{ exp: null }, 401],
     [{ exp: 1 }, 401],
     [{ nbf: 9999999999 }, 401],
     [{ scp: 'other-scope' }, 403],
@@ -25,6 +27,28 @@ test('API verifies signatures, issuer, audience, expiry, scope and role', async 
       // Snapshot collection remains a GET-only endpoint.
       expect((await request.post(api, { headers })).status()).toBe(405);
     }
+  }
+});
+
+test('signed JWTs reject payload and signature tampering', async ({ request }) => {
+  const { access_token } = await (await request.get('http://127.0.0.1:9180/token')).json();
+  const parts = access_token.split('.');
+  const claims = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
+  const payload = Buffer.from(JSON.stringify({ ...claims, sub: 'another-user' })).toString(
+    'base64url',
+  );
+  const signature = `${parts[2][0] === 'A' ? 'B' : 'A'}${parts[2].slice(1)}`;
+  for (const token of [
+    `${parts[0]}.${payload}.${parts[2]}`,
+    `${parts[0]}.${parts[1]}.${signature}`,
+  ]) {
+    expect(
+      (
+        await request.get('http://127.0.0.1:8081/api/apps', {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+      ).status(),
+    ).toBe(401);
   }
 });
 

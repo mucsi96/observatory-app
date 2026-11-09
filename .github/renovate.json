@@ -13,11 +13,6 @@
       "matchPackageNames": [
         "*"
       ]
-    },
-    {
-      "description": "Keep TypeScript within typescript-eslint's supported peer range until TypeScript 7 support is available.",
-      "matchPackageNames": ["typescript"],
-      "allowedVersions": "<6.1.0"
     }
   ],
   "labels": [

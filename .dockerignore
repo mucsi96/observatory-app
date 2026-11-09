@@ -5,6 +5,7 @@
 config.json
 observatory
 target
+bin
 **/node_modules
 frontend/dist
 frontend/coverage

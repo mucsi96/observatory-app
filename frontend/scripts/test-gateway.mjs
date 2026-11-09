@@ -102,7 +102,7 @@ const backend = image
       ],
       { stdio: 'inherit' },
     )
-  : spawn(`${root}/target/debug/observatory`, ['start', '--environment', 'test'], {
+  : spawn(`${root}/bin/observatory`, [], {
       cwd: root,
       env,
       stdio: 'inherit',

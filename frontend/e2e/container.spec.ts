@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('the non-root read-only production image serves the real React app and shared API', async ({
+test('the non-root read-only Go image serves the shared API behind the vanilla client', async ({
   page,
   request,
 }) => {

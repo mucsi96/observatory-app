@@ -247,29 +247,24 @@ async function startObservatory(
     listen(logsServer),
   ]);
   const url = `http://127.0.0.1:${await availablePort()}`;
-  const process = spawn(
-    fileURLToPath(new URL('../../../target/debug/observatory', import.meta.url)),
-    ['start', '--environment', options.environment ?? 'test'],
-    {
-      cwd: fileURLToPath(new URL('../../../', import.meta.url)),
-      env: {
-        ...globalThis.process.env,
-        CONFIG_FILE: configFile,
-        OIDC_ISSUER: 'http://127.0.0.1:9180/default',
-        API_CLIENT_ID: 'observatory-test-api',
-        LISTEN_ADDR: new URL(url).host,
-        GITHUB_TOKEN: options.githubToken ?? 'github-private-token',
-        GITHUB_TOKEN_FILE: options.githubTokenFile === undefined ? undefined : githubTokenFile,
-        GITHUB_API_URL: githubUrl,
-        GITHUB_CA_FILE: caFile,
-        KUBERNETES_API_URL: kubeUrl,
-        KUBERNETES_CA_FILE: caFile,
-        KUBERNETES_TOKEN_FILE: tokenFile,
-        RUST_LOG: 'observatory=info',
-      },
-      stdio: ['ignore', 'pipe', 'pipe'],
+  const process = spawn(fileURLToPath(new URL('../../../bin/observatory', import.meta.url)), [], {
+    cwd: fileURLToPath(new URL('../../../', import.meta.url)),
+    env: {
+      ...globalThis.process.env,
+      CONFIG_FILE: configFile,
+      OIDC_ISSUER: 'http://127.0.0.1:9180/default',
+      API_CLIENT_ID: 'observatory-test-api',
+      LISTEN_ADDR: new URL(url).host,
+      GITHUB_TOKEN: options.githubToken ?? 'github-private-token',
+      GITHUB_TOKEN_FILE: options.githubTokenFile === undefined ? undefined : githubTokenFile,
+      GITHUB_API_URL: githubUrl,
+      GITHUB_CA_FILE: caFile,
+      KUBERNETES_API_URL: kubeUrl,
+      KUBERNETES_CA_FILE: caFile,
+      KUBERNETES_TOKEN_FILE: tokenFile,
     },
-  );
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
   let output = '';
   process.stdout?.on('data', (chunk) => {
     output += chunk.toString();
@@ -303,7 +298,7 @@ async function startObservatory(
     await expect
       .poll(
         async () => {
-          if (process.exitCode !== null) throw new Error(`Rust server exited: ${output}`);
+          if (process.exitCode !== null) throw new Error(`Go server exited: ${output}`);
           try {
             return (await request.get(`${url}/healthz`)).status();
           } catch {
