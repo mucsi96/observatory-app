@@ -298,7 +298,7 @@ test('each PR has its own accessible linked status icon without counts', async (
   await expect(row.getByRole('img')).toHaveCount(0);
 });
 
-test('storage serves the production React bundle under CSP and fleet interactions work', async ({
+test('storage serves the production vanilla bundle under CSP and fleet interactions work', async ({
   page,
   request,
 }) => {
@@ -317,8 +317,7 @@ test('storage serves the production React bundle under CSP and fleet interaction
   await page.getByRole('button', { name: 'Hello' }).click();
   await expect(page.getByText('ghcr.io/owner/hello:sha-123')).toBeVisible();
   await expect(page.getByText('Draft', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: /Filter applications/ }).click();
-  await page.getByRole('option', { name: 'All applications', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Filter applications' }).selectOption('all');
   await page.getByRole('searchbox').fill('language');
   await expect(page.getByRole('button', { name: 'Hello' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Language' })).toBeVisible();
@@ -348,14 +347,11 @@ test('mobile layout remains usable and refresh retains data after an error', asy
   await page.getByRole('button', { name: 'Refresh' }).click();
   await expect(page.getByText(/Showing the last received snapshot/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Hello' })).toBeVisible();
-  const filter = page.getByRole('button', { name: /Filter applications/ });
-  await filter.click();
-  const healthy = page.getByRole('option', { name: 'Healthy', exact: true });
-  await expect(healthy).toBeVisible();
-  const bounds = await healthy.boundingBox();
+  const filter = page.getByRole('combobox', { name: 'Filter applications' });
+  const bounds = await filter.boundingBox();
   expect(bounds!.x).toBeGreaterThanOrEqual(0);
   expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
-  await healthy.click();
+  await filter.selectOption('healthy');
   await expect(page.getByRole('button', { name: 'Language', exact: true })).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
@@ -419,8 +415,7 @@ test('partial totals, search, filters and expansion state work through the brows
     'aria-expanded',
     'true',
   );
-  await page.getByRole('button', { name: /Filter applications/ }).click();
-  await page.getByRole('option', { name: 'Healthy', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Filter applications' }).selectOption('healthy');
   await expect(page.getByRole('button', { name: 'Language', exact: true })).toHaveCount(0);
   await page.getByRole('searchbox').fill('no match');
   await expect(
@@ -437,8 +432,7 @@ test('dependency attention reflects evidence separately from workflow success an
   repo.mrs[0].pipeline = 'passed';
   await page.route(/\/api\/apps(?:\/refresh)?$/, (route) => route.fulfill({ json: snapshot }));
   await page.goto('/');
-  await page.getByRole('button', { name: /Filter applications/ }).click();
-  await page.getByRole('option', { name: 'Needs attention', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Filter applications' }).selectOption('attention');
   await expect(page.getByRole('button', { name: 'Hello', exact: true })).toBeVisible();
   await expect(page.getByText('No PR created or updated by this run')).toBeVisible();
   repo.dependencyUpdate!.outcome = 'PR updated';
@@ -452,15 +446,13 @@ test('dependency attention reflects evidence separately from workflow success an
   ];
   await page.getByRole('button', { name: 'Refresh' }).click();
   await expect(page.getByRole('button', { name: 'Hello', exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: /Filter applications/ }).click();
-  await page.getByRole('option', { name: 'All applications', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Filter applications' }).selectOption('all');
   await expect(page.getByText('PRs updated by this run:')).toBeVisible();
   await expect(page.getByRole('link', { name: '#42 Update dependencies' })).toHaveAttribute(
     'href',
     'https://github.com/o/r/pull/42',
   );
-  await page.getByRole('button', { name: /Filter applications/ }).click();
-  await page.getByRole('option', { name: 'Needs attention', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Filter applications' }).selectOption('attention');
   repo.dependencyUpdate!.outcome = 'pending';
   repo.dependencyUpdate!.run!.status = 'in_progress';
   await page.getByRole('button', { name: 'Refresh' }).click();
@@ -499,15 +491,13 @@ test('keyboard filtering and disclosure preserve focus and expansion under CSP',
   await hello.focus();
   await hello.press('Enter');
   await expect(hello).toHaveAttribute('aria-expanded', 'true');
-  const filter = page.getByRole('button', { name: /Filter applications/ });
+  const filter = page.getByRole('combobox', { name: 'Filter applications' });
   await filter.focus();
+  await filter.press('End');
   await filter.press('Enter');
-  await page.getByRole('option', { name: 'All applications', exact: true }).press('End');
-  await page.getByRole('option', { name: 'Healthy', exact: true }).press('Enter');
   await expect(filter).toBeFocused();
   await expect(page.getByRole('button', { name: 'Language', exact: true })).toHaveCount(0);
   await expect(hello).toHaveAttribute('aria-expanded', 'true');
-  await filter.press('Enter');
   await page.keyboard.press('Escape');
   await expect(page.getByRole('listbox')).toHaveCount(0);
   await expect(filter).toBeFocused();

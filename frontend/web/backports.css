@@ -1,0 +1,140 @@
+.pr-statuses {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.pr-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  font-size: 18px;
+}
+.pr-icon.good {
+  color: #7dd3ae;
+}
+.pr-icon.bad {
+  color: #fda4af;
+}
+.pr-icon.pending {
+  color: #fcd34d;
+}
+.pr-icon.neutral {
+  color: #b7becf;
+}
+.app-row.deploying {
+  box-shadow: inset 3px 0 #fcd34d;
+}
+code.version {
+  display: block;
+}
+.add-issue {
+  display: block;
+  margin-top: 8px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+}
+.issue-dialog {
+  width: min(560px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  padding: 24px;
+  background: #181d29;
+  color: #e5e7ef;
+  border: 1px solid #42495b;
+  border-radius: 12px;
+}
+.issue-dialog::backdrop {
+  background: #0009;
+}
+.issue-dialog form {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.issue-dialog h2 {
+  margin: 0;
+}
+.issue-dialog label {
+  display: grid;
+  gap: 8px;
+}
+.issue-dialog input,
+.issue-dialog textarea {
+  width: 100%;
+  min-width: 0;
+  background: #10131b;
+  color: inherit;
+  border: 1px solid #596075;
+  border-radius: 6px;
+  padding: 10px;
+  font: inherit;
+}
+.issue-dialog textarea {
+  resize: vertical;
+}
+.issue-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+.issue-actions button {
+  padding: 10px 18px;
+  background: #2c2746;
+  color: #e5e7ef;
+  border: 1px solid #777094;
+  border-radius: 6px;
+}
+.issue-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.issue-feedback [role='alert'] {
+  color: #fda4af;
+}
+.issue-feedback p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+main,
+.fleet,
+.toolbar,
+.controls {
+  min-width: 0;
+}
+button:focus-visible,
+select:focus-visible {
+  outline: 3px solid #9d8de7;
+  outline-offset: 3px;
+}
+@media (max-width: 600px) {
+  .controls {
+    flex-wrap: wrap;
+  }
+  .search {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .controls select {
+    max-width: 100%;
+  }
+  .issue-dialog {
+    padding: 18px;
+  }
+  .brand {
+    gap: 8px;
+  }
+  .topbar {
+    padding-inline: 16px;
+  }
+}

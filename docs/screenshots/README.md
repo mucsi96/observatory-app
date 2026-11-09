@@ -1,6 +1,6 @@
 # Application stack previews
 
-Screenshots of the production React bundle served by the Rust backend, using
+Historical migration screenshots of the React bundle served by the Rust backend, using
 illustrative end-to-end fixture data. These are visual-review images, not live
 production signals or pixel-diff test baselines.
 

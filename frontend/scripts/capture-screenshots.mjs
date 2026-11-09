@@ -48,7 +48,7 @@ try {
   let ready = false;
   for (let attempt = 0; attempt < 100; attempt += 1) {
     if (server.exitCode !== null || !server.pid)
-      throw new Error(`Rust server exited: ${serverOutput}`);
+      throw new Error(`Go server exited: ${serverOutput}`);
     try {
       ready = (await fetch(`${origin}/healthz`)).ok;
     } catch {
@@ -57,7 +57,7 @@ try {
     if (ready) break;
     await delay(100);
   }
-  assert(ready, `Rust server did not become ready: ${serverOutput}`);
+  assert(ready, `Go server did not become ready: ${serverOutput}`);
 
   const snapshot = fleetSnapshot();
   const legacy = structuredClone(snapshot.apps[0]);
@@ -120,16 +120,15 @@ try {
     .getByText('ghcr.io/owner/hello:sha-123', { exact: true })
     .waitFor({ state: 'visible' });
   await page.screenshot({
-    path: `${output}/react-ui-expanded-desktop.png`,
+    path: `${output}/expanded-desktop.png`,
     fullPage: true,
     animations: 'disabled',
   });
   await page.getByRole('button', { name: 'Hello', exact: true }).click();
   await page.setViewportSize({ width: 430, height: 932 });
-  await page.getByRole('button', { name: /Filter applications/ }).click();
-  await page.getByRole('option', { name: 'Healthy', exact: true }).waitFor({ state: 'visible' });
+  await page.getByRole('combobox', { name: 'Filter applications' }).focus();
   await page.screenshot({
-    path: `${output}/react-ui-filter-mobile.png`,
+    path: `${output}/filter-mobile.png`,
     fullPage: true,
     animations: 'disabled',
   });
@@ -177,7 +176,7 @@ try {
     browsers.push(safari);
     const mobile = await safari.newPage({ ...devices['iPhone 13'] });
     // Playwright changes the user agent but retains the Linux host platform.
-    // Match iOS platform detection to exercise React Aria's mobile Safari path.
+    // Match the mobile Safari platform for the native controls.
     await mobile.addInitScript(() => {
       Object.defineProperty(navigator, 'platform', { get: () => 'iPhone' });
     });
@@ -185,32 +184,14 @@ try {
     await mobile.route('**/api/apps', (route) => route.fulfill({ json: snapshot }));
     await mobile.goto(origin);
     await mobile.getByRole('button', { name: 'Hello', exact: true }).waitFor({ state: 'visible' });
-    await mobile.getByRole('button', { name: /Filter applications/ }).tap();
-    await mobile
-      .getByRole('option', { name: 'Healthy', exact: true })
-      .waitFor({ state: 'visible' });
-    const mobileStyles = await mobile
-      .locator('head style')
-      .evaluateAll((styles) =>
-        styles.map((style) => ({ css: style.textContent, rules: style.sheet?.cssRules.length })),
-      );
-    assert(
-      mobileStyles.some(
-        (style) => style.css.includes('overscroll-behavior: contain') && style.rules > 0,
-      ),
-      'WebKit scroll style was not applied under CSP',
-    );
-    await mobile.getByRole('option', { name: 'Healthy', exact: true }).tap();
+    await mobile.getByRole('combobox', { name: 'Filter applications' }).selectOption('healthy');
     assert.equal(await mobile.getByRole('button', { name: 'Language', exact: true }).count(), 0);
     await mobile.getByRole('button', { name: 'Hello', exact: true }).tap();
     await mobile
       .getByText('ghcr.io/owner/hello:sha-123', { exact: true })
       .waitFor({ state: 'visible' });
     await mobile.getByRole('button', { name: 'Hello', exact: true }).tap();
-    await mobile.getByRole('button', { name: /Filter applications/ }).tap();
-    await mobile
-      .getByRole('option', { name: 'Healthy', exact: true })
-      .waitFor({ state: 'visible' });
+    await mobile.getByRole('combobox', { name: 'Filter applications' }).focus();
     assert(
       await mobile.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
       'Mobile WebKit viewport has document overflow',
@@ -219,7 +200,7 @@ try {
     // WebKit's screenshot helper injects a temporary `body {}` repaint stylesheet.
     // Verify application errors first; the rejected tooling style does not affect pixels.
     await mobile.screenshot({
-      path: `${output}/react-ui-mobile-webkit.png`,
+      path: `${output}/mobile-webkit.png`,
       fullPage: true,
       animations: 'disabled',
       scale: 'css',

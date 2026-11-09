@@ -36,7 +36,7 @@ jq -n --arg image "$SERVER_IMAGE" --arg host "$HOSTNAME" --arg clientId "$API_CL
   --arg issuer "$OIDC_ISSUER" --argjson auth "$PROXY_AUTH" --slurpfile inventory "$work/inventory.json" '{
   image:$image,host:$host,basePath:"/api",clientId:$clientId,auth:$auth,
   serviceAccountName:"observatory-api-workload-identity",serviceAccount:{create:true,automountServiceAccountToken:true},
-  env:{LOCO_ENV:"production",CONFIG_FILE:"/runtime-config/config.json",GITHUB_TOKEN_FILE:"/credentials/token",OIDC_ISSUER:$issuer,API_CLIENT_ID:$clientId},
+  env:{CONFIG_FILE:"/runtime-config/config.json",GITHUB_TOKEN_FILE:"/credentials/token",OIDC_ISSUER:$issuer,API_CLIENT_ID:$clientId},
   configFile:[{name:"config.json",mountPath:"/runtime-config/config.json",data:($inventory[0] | del(.auth) | tojson | @base64)}],
   extraVolumes:[{name:"github",secret:{secretName:"observatory-github"}}],
   extraVolumeMounts:[{name:"github",mountPath:"/credentials",readOnly:true}],

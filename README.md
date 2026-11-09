@@ -1,334 +1,186 @@
 # Observatory
 
-A production fleet dashboard built with **Rust and React**. The backend uses Loco, Axum,
-Tokio, Serde, Reqwest, and kube-rs; the frontend uses React, TypeScript, Vite,
-TanStack Query, Zod, and [React UI](https://github.com/mucsi96/react-ui). Entra
-authentication uses the platform's existing OIDC proxy. Build assets are served
-directly from Azure Blob Storage, with no external font or CDN dependencies.
+A production fleet dashboard built with **Go and vanilla JavaScript**, restoring
+the original dark dashboard and backporting the features added since October 11.
+The backend uses the Go standard library without third-party Go dependencies.
+Vite bundles the frontend, Zod validates snapshots, and Faro reports browser
+telemetry. There is no React or Rust runtime or build dependency.
 
 Extracted from [p07](https://github.com/mucsi96/p07) with its application history.
-Provisioning lives in [k8s-modules](https://github.com/mucsi96/k8s-modules), module
-`setup_app_dashboard`; p07 supplies the application inventory and platform inputs.
+p07 owns inventory, Entra registrations, workload identity, ForwardAuth, storage
+and permissions. This repository owns application builds, tests and deployment.
+See [the rollback inventory](docs/stack-rollback.md).
 
-## Development
+## Development and verification
 
-Requires Rust 1.99 (pinned in `rust-toolchain.toml`) and Node.js 24+.
-Install Rust with [rustup](https://rustup.rs/). From the repository root:
-
-```bash
-npm --prefix frontend ci
-npm --prefix frontend run build
-cargo build --locked
-node frontend/scripts/test-gateway.mjs
-```
-
-Open http://localhost:8080. Set `GITHUB_TOKEN` to read real repository data. Without
-in-cluster credentials Kubernetes signals are explicitly **unknown**. The example
-contains placeholder URLs, not demo data. The local server binds to loopback.
-The local gateway serves the built document unchanged and supplies ephemeral test JWTs.
-The production container runs as a non-root process in a distroless image and
-binds to `0.0.0.0:8080`.
-
-### Architecture
-
-- `src/model.rs`, `src/config.rs`: typed API models and validated JSON inventory.
-  The existing `config.json`/ConfigMap shape and camelCase API remain compatible.
-- `src/integrations/`: typed Kubernetes deployments and GitHub REST collectors.
-  kube-rs defaults to in-cluster credentials and handles projected token rotation;
-  local kubeconfig is never used. Explicit HTTPS endpoint/CA/token-file settings
-  support configured environments and isolated end-to-end testing. TLS and error
-  handling keep secrets server-side.
-- `src/collector.rs`: bounded async collection, independent per-app signals, and
-  an immutable snapshot shared through a Tokio watch channel. There is no database
-  or persistent application state to migrate.
-- `src/app.rs`, `src/main.rs`: native Loco CLI and application hooks, environment
-  configuration, structured tracing (`RUST_LOG`), and bounded SIGINT/SIGTERM shutdown.
-- `src/controllers/`, `src/auth.rs`: thin API controllers and JWT authorization.
-  `src/services/` owns fleet lifecycle and typed issue creation/validation/errors.
-  Loco runs database-free because Observatory has no persisted application data.
-- Rust integrations use free functions with explicit inputs and typed data. Workload
-  readiness and dependency evidence are pure transformations; HTTP collection and
-  snapshot publication form the async I/O boundary. React uses function components
-  and hooks.
-- `frontend/src/features/fleet/`: schema-validated server state, React components,
-  search/filter/expansion state, and signal selectors. TanStack Query owns polling,
-  cancellation, focus refetches, and retention of the last successful snapshot.
-- Shared controls, cards, badges, alerts, and typography use `@mucsi96/react-ui`.
-  Component layout is co-located in CSS Modules and uses the library's public
-  `--bt-*` tokens. `frontend/src/styles.css` contains only document defaults and
-  Observatory's accent tokens; the library stylesheet is imported once in `main.tsx`.
-  [Migration notes and reusable component proposals](docs/react-ui-migration.md)
-  cover the expandable table and strict CSP integration.
-- Same-origin JSON transport and Zod validation live in `frontend/src/api.ts`;
-  fleet query/mutation hooks own request state and domain errors. See the
-  [React alignment review](docs/react-alignment.md) for component, hosting and
-  reference-stack decisions. Run `npm --prefix frontend run typecheck` for the
-  standalone TypeScript check (also included in `build`).
-
-Runtime settings: `CONFIG_FILE` (default `config.json`), `GITHUB_TOKEN` or
-`GITHUB_TOKEN_FILE`, `LISTEN_ADDR` (default `127.0.0.1:8080`), and `RUST_LOG`.
-`OIDC_ISSUER` and `API_CLIENT_ID` are required. The API validates RS256 signatures,
-issuer, audience, expiry, `api-access` scope and `readApps` role.
-Creating issues additionally requires the `createIssues` app role in the API JWT.
-Provision and assign that role in Entra to issue authors, then refresh their
-Observatory session. The server's `GITHUB_TOKEN`/`GITHUB_TOKEN_FILE` must have
-**Issues: write** permission for each configured repository (and issues enabled).
-Issues are authored by that token's GitHub account; users do not sign in to GitHub.
-
-The native server command is `cargo run --locked -- start` (or
-`target/debug/observatory start --environment production`). Run from the repository
-root; Loco loads `config/development.yaml`, `config/test.yaml`, or
-`config/production.yaml`, selected by `--environment` or `LOCO_ENV`. `CONFIG_FOLDER`
-can select another configuration directory. Production logs are JSON; local/test
-logs are compact. `RUST_LOG` overrides the configured log filter. `--help` lists
-native Loco commands, including `routes`.
-
-Typed application settings may be supplied in the YAML `settings` block using
-the field names in `src/settings.rs`; the existing environment variables override
-them. `LISTEN_ADDR` overrides Loco's server binding/port. Inventory remains the
-existing JSON/ConfigMap format, separate from framework configuration. Token-file
-contents take precedence over `GITHUB_TOKEN` and are never placed in Loco settings.
-The container packages the YAML files and runs `start` in the production environment.
-See the [backend alignment review](docs/backend-alignment.md) for reference-stack
-decisions and lifecycle verification.
-
-Inventory entries without a `namespace` track repositories only. Supply `name`,
-`repository` (`owner/repo`) and an HTTPS `url`. PRs, checks, issues and workflow
-signals are collected normally; Kubernetes collection is skipped and workload
-health is **not applicable**. Repository-only entries must have unique repositories.
-
-The static client compiles Faro's public app name and `/_telemetry/collect` path
-into its bundle and resolves the URL against the browser's application origin.
-There is no global config, HTML bootstrap marker or response-body middleware.
-The chart authenticates documents and owns nested SPA routing. Index HTML lives
-in Azure's website container; all assets load directly from its public `assets`
-Blob container with app-origin CORS. Deployment sets document response headers
-through Gateway API, retaining strict style hashes and frame restrictions.
-No inline script or script hash is needed. CSP allows
-assets only from the app and its specific Blob origin; APIs and telemetry stay
-same-origin. There is no client image or Kubernetes client Deployment.
-
-Optional server-side upstream settings are `GITHUB_API_URL` (default
-`https://api.github.com`), `GITHUB_CA_FILE`, `KUBERNETES_API_URL`,
-`KUBERNETES_CA_FILE`, and `KUBERNETES_TOKEN_FILE`. Explicit upstream endpoints must
-use HTTPS. Kubernetes defaults to the in-cluster service account; when an endpoint
-is configured, CA/token paths default to the same service-account directory.
-
-### Verification
+Requires Go 1.24+ (CI/container use 1.27.3), Node 24+, and OpenSSL for E2E fixtures.
 
 ```bash
-cargo fmt --all --check
-cargo clippy --locked --all-targets -- -D warnings
-cargo build --locked
+go test -race ./...
+go vet ./...
+go build -o bin/observatory .
+node --test scripts/app.test.cjs
 npm --prefix frontend ci
 npm --prefix frontend run lint
-npm --prefix frontend run format:check
 npm --prefix frontend run build
-npm --prefix frontend exec -- playwright install chromium
+npm --prefix frontend exec -- playwright install chromium webkit
 npm --prefix frontend run test:e2e
 bash -n scripts/deploy.sh
-docker build -t observatory:local .
-OBSERVATORY_CONTAINER_IMAGE=observatory:local npm --prefix frontend run test:e2e
 ```
 
-**All behavioral tests live in `frontend/e2e/` and run through Playwright.** The
-`ui` project loads the production React bundle through the local gateway and checks
-filtering, expansion, partial totals, safe links, stale data, refresh recovery, CSP,
-and mobile layout. The `collectors` project launches real Rust processes against
-isolated HTTPS GitHub/Kubernetes/log-storage fixtures and checks readiness,
-pagination, partial failures, credential isolation, dependency creation evidence,
-and the actual 50-second collection deadline. There are no separate unit or
-component test suites.
+Run `node frontend/scripts/test-gateway.mjs` to serve the built UI at
+http://127.0.0.1:8080 with a local identity fixture. The gateway injects ephemeral
+test JWTs; the real API independently verifies them. The API binds to loopback
+by default, and to `0.0.0.0:8080` in the non-root production container.
 
-E2E requires OpenSSL, Chromium, the frontend build, and `target/debug/observatory`.
-Stop other servers using port 8080 first. `npm --prefix frontend test` runs the same
-Playwright suite; `npm --prefix frontend run test:watch` opens Playwright's UI.
-Setting `OBSERVATORY_CONTAINER_IMAGE` selects the container E2E project, which
-starts the image with a read-only filesystem and all Linux capabilities dropped.
-Playwright waits for HTTP readiness before exercising the real UI and API. CI runs
-this project after building the production image on PRs.
-
-### Screenshot review
-
-The pipeline captures desktop, expanded-row, mobile, filter-menu, issue-dialog, and mobile WebKit
-views from the production bundle and uploads them as the `dashboard-screenshots`
-Actions artifact. Captures use illustrative E2E fixture data and are visual-review
-evidence, not live production signals or pixel-diff baselines. Generated images
-are saved in the ignored `frontend/test-results/screenshots/` directory.
-
-After building the frontend and Rust binary, reproduce the captures locally:
+`frontend/e2e/` retains the post-migration Playwright suites. The `ui` project
+tests the production bundle, filtering, disclosure, stale/partial data, issue
+creation and mobile layout. `collectors` launches real Go processes with isolated
+HTTPS GitHub/Kubernetes/log-storage mocks. `auth` verifies JWT and mutation
+boundaries. Original Go and vanilla rendering tests are restored as well.
 
 ```bash
-npm --prefix frontend exec -- playwright install chromium webkit
+docker build -t observatory:local .
+OBSERVATORY_CONTAINER_IMAGE=observatory:local npm --prefix frontend run test:e2e
 SCREENSHOT_WEBKIT=1 npm --prefix frontend run screenshots
 ```
 
-Without `SCREENSHOT_WEBKIT=1`, the script captures six Chromium views, including
-desktop and mobile issue dialogs. The
-script starts an isolated Rust server, validates mobile overflow and application
-errors, and exercises touch filtering and disclosure in WebKit. Playwright's
-WebKit screenshot helper injects a temporary `body {}` repaint stylesheet that
-the production CSP rejects; this known tooling-only warning is checked separately
-after application verification and does not affect the captured pixels.
+The container suite runs with a read-only filesystem and capabilities dropped.
+Screenshot captures cover desktop, expanded rows, mobile, filters, issue dialogs
+and mobile WebKit. CI publishes these under `dashboard-screenshots`; they use
+fixture data for visual review, not production signals or pixel baselines.
+
+## Architecture and configuration
+
+- `main.go`: inventory, bounded concurrent collection, shared snapshots and HTTP lifecycle.
+- `github.go`, `dependencies.go`, `dependency_logs.go`, `stack.go`: repository
+  signals, attempt-specific Renovate evidence, and cached technology detection.
+- `kubernetes.go`: workload readiness and projected service-account token reads.
+- `auth.go`, `issues.go`: independent JWT authorization and issue submission.
+- `frontend/web/`: original vanilla dashboard/styles with feature backports.
+- `frontend/main.js`: build-time Faro configuration and snapshot validation.
+
+There is no database or persistent application state to migrate. Runtime variables:
+
+| Variable | Contract |
+| --- | --- |
+| `CONFIG_FILE` | Inventory JSON; defaults to `config.json` |
+| `OIDC_ISSUER`, `API_CLIENT_ID` | Required issuer and API audience |
+| `LISTEN_ADDR` | Defaults to `127.0.0.1:8080` |
+| `GITHUB_TOKEN_FILE` | Optional server-side token file, takes precedence over `GITHUB_TOKEN` |
+| `GITHUB_API_URL`, `GITHUB_CA_FILE` | Optional HTTPS API endpoint/custom trust; default `https://api.github.com` |
+| `KUBERNETES_API_URL`, `KUBERNETES_CA_FILE`, `KUBERNETES_TOKEN_FILE` | Optional HTTPS endpoint/trust/token; defaults to in-cluster service-account files |
+
+Upstream redirects are disabled except a single validated HTTPS log-storage
+redirect, which never receives GitHub credentials. OIDC allows HTTP only on
+loopback for local fixtures. JWTs must have RS256 signatures, the configured
+issuer/audience, valid expiry/not-before, `api-access` scope and `readApps` role.
+Issue creation additionally requires `createIssues`. Keys refresh at bounded
+intervals. Missing Kubernetes credentials produce explicit unknown signals.
+
+Inventory entries without `namespace` track repositories only: supply `name`,
+`repository` (`owner/repo`) and HTTPS `url`. Kubernetes is skipped and health is
+**not applicable**. Repository-only entries require unique repositories. Optional
+`deploymentWorkflow` selects a workflow filename instead of `pipeline.yml`.
+Optional `stack: {"frontend":"Angular","backend":"Java"}` overrides detection
+for either or both components.
 
 ## Signals
 
-- **Frontend / Backend:** stack labels such as **Angular / Java** or **React / Rust**,
-  detected from manifests on the repository's default branch. Frontend detection
-  recognizes Angular, React, Vue, Svelte, Solid, and Preact dependencies; backend
-  detection recognizes Rust, Java/Kotlin, Go, Python, Ruby, PHP, C#/F#, and common
-  Node.js server frameworks. Backend manifests must be at the repository root or
-  in `backend`, `server`, `api`, `service`, or `services` directories. Frontend,
-  tooling, test, example, and generated directories are excluded from backend
-  detection. Unknown components are shown as **Unknown**, and collection failures
-  remain visible without hiding health or repository signals. Detection reads up
-  to 12 package manifests (256 KiB each), and rejects truncated repository trees.
-  Successful manifest evidence is cached by repository and blob SHA in a bounded
-  512-entry in-memory cache shared across collection cycles and concurrent apps.
-  Repository trees are still refreshed each cycle, so changed manifests are
-  collected immediately; failed or cancelled manifest reads are retried.
-  These labels describe repository technologies, not the deployed image version.
-  Search also matches stack labels. Optional app inventory overrides take
-  precedence and can supply either or both components, including apps without a
-  repository:
+- **Frontend / Backend:** default-branch tree/manifests detect Angular, React,
+  Vue, Svelte, Solid, Preact, Rust, Java/Kotlin, Go, Python, Ruby, PHP, C#/F# and
+  common Node server frameworks. Tooling/tests/generated paths are excluded.
+  Backend manifests must be at root or within backend/server/api/service/services,
+  outside frontend/client/web/ui. Truncated trees and more than 12 manifests are
+  rejected; each manifest is bounded to 256 KiB. Successful evidence is cached by
+  repository/blob SHA in a bounded 512-entry cache; failed reads are retried.
+  Unknown/partial labels and errors remain visible. Search includes stack labels.
+- **Health:** Kubernetes observed generation, updated/available/desired replicas
+  and failure conditions. Scaled-down workloads are degraded; an app namespace
+  without deployments is not deployed; repository-only entries are not applicable.
+  This is readiness, not an external uptime probe.
+- **Production version:** deployed image tags/digests. OAuth2 Proxy images are
+  hidden, while their workload readiness still contributes to health/details.
+- **Last deployment:** the latest deploy job in the most recent 20 main-branch
+  delivery runs, with paginated jobs. Active delivery pipelines are shown before
+  the deploy job exists, independently of the latest deploy result. PR and
+  unrelated workflows are excluded.
+- **MRs / PRs:** paginated open PRs, drafts and individually linked accessible
+  status icons. Checks and legacy statuses are combined; failure wins over running.
+  Missing checks and unknown checks are distinct from success. A denied Checks API
+  leaves PR checks unknown without hiding other repository signals.
+- **Issues:** open issues excluding PRs and Renovate's Dependency Dashboard.
+  Add issue works even when collection is unavailable. The dialog preserves drafts
+  on errors, prevents duplicate submissions/dismissal while pending, and shows the
+  created issue link. Requests are not automatically retried. The dedicated server
+  GitHub token needs Issues write access and issues enabled on each repository;
+  issues are authored by that token's account, not a browser GitHub login.
+- **Dependency update:** discovers the weekly `update_dependencies.yml` separately
+  from delivery history. Links come only from explicit repository-scoped Renovate
+  `PR created`/`PR updated` events in the latest run attempt's logs, including closed
+  and merged PRs. A repository-finished event is required. No affected PR is a
+  review signal even after a green run; unavailable/incomplete logs are unverified,
+  never proof of success. Downloads and total uncompressed content are limited to
+  16 MiB. Logs, signed URLs, credentials and upstream response bodies stay private.
 
-  ```json
-  "stack": { "frontend": "Angular", "backend": "Java" }
-  ```
+The collector handles four apps concurrently, with independent Kubernetes,
+repository and technology signals, request timeouts and a 50-second collection
+deadline. It waits 60 seconds between collections. Browsers poll snapshots every
+15 seconds; snapshots older than three minutes are stale.
 
-- **Health:** all Deployments in each app namespace, using observed generation,
-  updated/available/desired replicas, and failure conditions. Scaled-down workloads
-  are degraded, empty namespaces are not deployed, API failures are unknown.
-  Health means Kubernetes readiness, not an external synthetic uptime probe.
-- **Production version:** Deployment container image tags/digests, with separate
-  frontend/backend images. Expand a row for full image references. OAuth2 Proxy
-  images are hidden from both version displays; their workloads still contribute
-  to health and show readiness in the expanded details.
-- **Last deployment:** the most recent `deploy` job found in the latest 20 main
-  branch workflow runs, restricted to `pipeline.yml` to exclude Pages deployments.
-  App descriptors can override `deploymentWorkflow`. An absent job is shown as
-  no recent deploy data. This repository uses the same `pipeline.yml` convention.
-  The same column also shows a linked **Deployment pipeline running/queued/waiting**
-  badge for active delivery runs, including builds and tests before a `deploy` job
-  exists. The latest deploy-job result remains visible underneath. Pull-request
-  runs and unrelated workflows are excluded; Kubernetes health remains independent.
-- **MRs / PRs:** all open GitHub PRs (paginated), including drafts. Checks and legacy
-  commit statuses are combined for the current head SHA. Failures take precedence
-  over running checks; no checks is distinct from passed; API errors are unknown.
-- **Issues:** open GitHub issues excluding PRs. Incomplete searches are rejected.
-  Each app with a repository has an **Add issue** button in its Issues column. A
-  dialog accepts a required title and optional Markdown description, then submits
-  through the authenticated Observatory API, even when repository signals are
-  unavailable. Errors retain the draft; success shows the created issue number.
-  Counts update with the next collection. Submission is not automatically retried;
-  after an uncertain network outcome, check the repository before trying again.
-- **Dependency update:** latest run of `update_dependencies.yml`, the fleet's
-  self-hosted Renovate workflow, with its status, timestamp and run link. Workflow
-  discovery is paginated and its history is queried directly so weekly runs are
-  not hidden by frequent delivery runs. PR links come **only from explicit Renovate
-   `PR created` and `PR updated` events in the latest run attempt's logs**, scoped to
-   that repository. All affected PRs are linked, including ones since closed/merged,
-   and the UI distinguishes creation, updates, and runs with both kinds of activity.
-   Timestamps, branch names, and previous attempts are never substituted as evidence.
-   The fleet's plain-text Renovate log format
-  with timestamps and repository-scoped events is required (`LOG_LEVEL=debug`
-  in the current workflows); a repository-finished event must also be present.
-   A completed run with neither event shows **No PR created or updated by this run** and
-  appears in **Needs attention**, even when the workflow is green. This is a
-   review signal, not proof of failure: a run may legitimately have no updates.
-   Running workflows show **Awaiting run result**. Missing,
-  expired, oversized, or unrecognized logs are **unverified**, never evidence of
-  success. Log downloads require Actions read access and are bounded to 16 MiB
-  compressed and total decompressed content per app per collection. Logs and
-  signed download URLs stay server-side; credentials are not sent to log storage.
-  Dependency API errors preserve other repository signals and any collected run
-  status. No workflow/runs remains distinct from an API error.
+## API and authentication
 
-The backend collects up to four apps concurrently, with request timeouts and a
-50-second collection deadline, then waits 60 seconds before collecting again.
-Browsers read the shared snapshot every 15 seconds. Refresh calls authenticated
-`POST /api/apps/refresh` with `X-Observatory-Request: refresh`, triggering immediate
-backend collection and returning the collected snapshot. Concurrent refreshes share
-an in-progress collection. Cross-origin browser requests are rejected. Snapshots
-older than three minutes are stale. Kubernetes and GitHub
-errors are independent per app. Credentials are never returned to the browser.
+`GET /healthz` is public. `GET /api/apps` requires read authorization and returns
+503 until initial collection finishes. `POST /api/apps/refresh` requires read
+authorization and `X-Observatory-Request: refresh`, triggers collection immediately,
+and returns the fresh snapshot. Concurrent requests share an in-progress cycle;
+the bounded queue rejects excess requests rather than multiplying upstream work.
 
-`GET /healthz` checks the server; `GET /api/apps` returns the latest snapshot (503
-until initial collection completes). Production access uses per-app oauth2-proxy
-ForwardAuth, host-only `__Host-session` cookies, ingress NetworkPolicy and backend
-JWT validation. `POST /api/issues` additionally requires the `createIssues` role,
-JSON and an `X-Observatory-Request: create-issue` header, rejects cross-origin Fetch
-Metadata, and grants no CORS preflights. It accepts only inventory repositories,
-titles of 1–256 characters and descriptions of at most 64 KiB (128 KiB request
-limit). GitHub credentials and upstream error bodies remain server-side.
+`POST /api/issues` requires read and issue roles, JSON and
+`X-Observatory-Request: create-issue`. Only configured repositories are accepted;
+titles are 1–256 characters, descriptions at most 64 KiB, bodies at most 128 KiB.
+Both mutations reject cross-origin Fetch Metadata and grant no CORS preflight
+permissions. Browser credentials remain gateway-managed. Reload the Observatory
+session after Entra role changes. Backend errors never expose upstream secrets.
 
-## Independent build and deployment
+## Build, static hosting and deployment
 
-The `Update dependencies` workflow runs Renovate every Monday and can also be
-dispatched manually. It uses Node 24 and the latest Renovate release to propose
-grouped Rust, frontend, and container dependency updates in `renovate/all`.
-The dependency dashboard tracks pending updates.
-
-`Pipeline` tests PRs. Main pushes and manual runs publish:
+`Pipeline` tests PRs and publishes new numbered components on main:
 
 ```text
 ghcr.io/mucsi96/observatory-app-server:<number>
-client-<number>: client-static.tar.gz release artifact
+client-<number>: client-static.tar.gz
 ```
 
-Make the GHCR package public after its first publication so Kubernetes can pull it.
-Once the provisioning module sets repository variable `DEPLOY_ENABLED=true`,
-the pipeline deploys the server image and tested static artifact using Azure OIDC, kubelogin,
-and the existing Twingate service account. Before provisioning, the deploy job is
-skipped so the first image can be published independently.
+`get-next-version` publishes only changed components and forwards exact versions,
+including unchanged ones. Releases target the build commit. The server package
+must be public for anonymous pulls. Publication/rollout are serialized.
+`Update dependencies` uses Go/Node and Renovate to propose grouped updates weekly.
 
-Terraform supplies repository secrets `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`,
-`AZURE_SUBSCRIPTION_ID`, `AZURE_KEYVAULT_NAME`, and `TWINGATE_SERVICE_KEY`.
-The deploy identity reads scoped secrets in the dedicated application vault:
-`k8s-config`, `hostname`, `api-client-id`, `forward-auth-config`, and
-`client-storage-config`. It manages Helm application resources, Middleware and TraefikService
-in the `observatory` namespace.
-Runtime GitHub credentials stay in the platform-managed Kubernetes Secret.
+When `DEPLOY_ENABLED=true`, Azure OIDC, kubelogin and Twingate deploy the tested
+artifact and image. Terraform supplies `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`,
+`AZURE_SUBSCRIPTION_ID`, `AZURE_KEYVAULT_NAME`, `TWINGATE_SERVICE_KEY`. The scoped
+application vault supplies `k8s-config`, `hostname`, `api-client-id`,
+`forward-auth-config`, and `client-storage-config`. The platform runtime Secret
+`observatory-github` remains mounted at `/credentials`; inventory is copied from
+the platform ConfigMap to the chart-owned config Secret. Redeploy after inventory
+changes; restart the server after token rotation.
 
-The client builds directly with Node/npm. The tested `frontend/dist` artifact is
-prepared by `frontend/scripts/static-client.mjs`, preserving bundle bytes while
-making HTML asset URLs absolute. Official `azure/login` and `azure/cli` actions
-empty `$web` and `assets`, batch-upload the latest assets with Entra authentication
-and one-year caching, then publish index last with `no-store`. Downtime is intentional;
-old bundles are removed. No Python upload script or client Docker build is involved.
-The deploy identity has separately scoped upload permissions for `$web` and
-`assets`. Azure website endpoints do not support CORS; browser requests use Blob.
+The existing `rust-app` **7.0.0** chart is a language-independent native HTTP process
+chart; it now runs the Go image. Retaining it preserves the deployment/service
+selector, workload-identity service account, credential mount and `/healthz`
+probes without introducing infrastructure changes. There is no Rust code or
+toolchain. Release names remain `observatory` and `observatory-client`, and the
+client chart remains `static-client-app` **5.0.0**. Reset Helm values on upgrades.
 
-The deploy script pins published `rust-app` **7.0.0** and `static-client-app` **5.0.0**.
-It receives `CLIENT_CSP_FILE` from the preparation step; `contentSecurityPolicy`
-is the only configurable document header. The chart fixes `Referrer-Policy` to
-`no-referrer` and `X-Content-Type-Options` to `nosniff`. The backend
-release remains `observatory`; `--take-ownership` adopts its existing resources.
-The client release is `observatory-client`. Inventory is copied from the platform
-ConfigMap into the chart config Secret; rerun deployment after inventory changes.
-The workload identity account is `observatory-api-workload-identity`.
-
-Component releases use `get-next-version`, publish only changed sources, and
-forward the selected exact versions to deployment, including unchanged components.
-
-### Shared UI hosting contract
-
-Observatory, Cooking and Skeleton use `static-client-app` 5.0.0: the gateway
-authenticates documents before rewriting deep links. Faro configuration is built
-into each app. Deployment omits chart `runtimeConfig` and resets Helm values,
-removing the old index-config middleware from document requests.
-Build assets load anonymously from Blob; APIs and telemetry stay on the app host.
-There is no browser OAuth implementation or environment-bootstrap fetch. Storage
-contains public build content, not protected application data.
-
-The hosting/auth deployment secrets are `forward-auth-config` (the shared `.auth`
-reference) and
-`client-storage-config` (account, document hostname and asset base URL). All
-pipelines test the static artifact, empty both static containers, then upload
-the latest assets first and index last. Terraform owns storage/CORS/upload permissions and the proxy; app
-charts own routes and authentication middleware.
-
-Backend authorization remains stack-specific: Observatory validates JWTs on its
-API and issue-creation role; Cooking checks JWT roles and mutation Origin; Skeleton uses Spring
-Security CSRF with Angular XSRF. Observatory additionally retains its strict CSP
-through the shared chart's `contentSecurityPolicy` setting.
+Vite builds `frontend/dist`; `static-client.mjs` rewrites only document asset URLs.
+Deployment empties `$web` and `assets`, uploads public Blob assets with one-year
+caching, then index with `no-store`. Downtime/removal of old bundles is intentional.
+Gateway ForwardAuth authenticates documents and handles SPA deep links; assets
+load anonymously from Blob with app-origin CORS. CSP allows only self and the
+specific asset origin, without inline scripts or general inline-style permission.
+One exact style-attribute hash is retained for WebKit compatibility.
+`CLIENT_CSP_FILE` feeds the
+chart's `contentSecurityPolicy`. No client image, browser OAuth implementation,
+runtime-config endpoint or HTML config injection is used. Faro's
+`observatory-client` name and same-origin `/_telemetry/collect` URL are compiled in.

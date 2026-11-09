@@ -14,6 +14,10 @@ Skeleton sync: follow `.github/prompts/sync-skeleton.md` in a weekly scheduled t
 
 ## Application contracts
 
+The target stack is Go with a vanilla JavaScript UI. Preserve the backported
+post-migration features and JWT authorization. Do not reintroduce React or Rust
+through skeleton alignment or dependency maintenance. See `docs/stack-rollback.md`.
+
 Follow the current branch's README.md for architecture, authentication, testing,
 and deployment conventions. Preserve its authentication boundaries, keep upstream
 credentials server-side, and keep partial collector failures visible. Adapt

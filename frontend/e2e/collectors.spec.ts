@@ -18,20 +18,20 @@ const updated =
   '2026-10-19T04:26:37.1874736Z DEBUG: PR updated...prNo: 42 (repository=o/r, branch=renovate/all)\n2026-10-19T04:26:37.1876455Z INFO: PR updated (repository=o/r, branch=renovate/all)\n2026-10-19T04:26:37.1877000Z        "pr": 42,\n';
 const logLimit = 16 * 1024 * 1024;
 
-test('Loco CLI exposes native commands and rejects invalid runtime settings before serving', () => {
-  const binary = fileURLToPath(new URL('../../target/debug/observatory', import.meta.url));
+test('Go server exposes configuration help and rejects invalid runtime settings before serving', () => {
+  const binary = fileURLToPath(new URL('../../bin/observatory', import.meta.url));
   const cwd = fileURLToPath(new URL('../../', import.meta.url));
   const help = spawnSync(binary, ['--help'], { cwd, encoding: 'utf8' });
   expect(help.status).toBe(0);
-  expect(help.stdout).toContain('start');
-  expect(help.stdout).toContain('routes');
+  expect(help.stdout).toContain('CONFIG_FILE');
+  expect(help.stdout).toContain('OIDC_ISSUER');
   for (const [overrides, message] of [
     [{ OIDC_ISSUER: '' }, 'OIDC_ISSUER is required'],
     [{ API_CLIENT_ID: '' }, 'API_CLIENT_ID is required'],
     [{ GITHUB_API_URL: 'http://github.example' }, 'upstream endpoints must use HTTPS'],
     [{ LISTEN_ADDR: 'missing-port' }, 'LISTEN_ADDR must contain a host and port'],
   ] as const) {
-    const result = spawnSync(binary, ['start', '--environment', 'production'], {
+    const result = spawnSync(binary, [], {
       cwd,
       encoding: 'utf8',
       timeout: 5000,
@@ -48,7 +48,7 @@ test('Loco CLI exposes native commands and rejects invalid runtime settings befo
   }
 });
 
-test('Loco production lifecycle serves readiness during collection and cancels on SIGTERM', async ({
+test('Go production lifecycle serves readiness during collection and cancels on SIGTERM', async ({
   observatory,
   request,
 }) => {
@@ -340,8 +340,7 @@ test('repository-only entries collect GitHub signals without Kubernetes and expa
     'Repository only',
   );
   await expect(page.getByRole('link', { name: 'Open application ↗' })).toHaveCount(0);
-  await page.getByRole('button', { name: /Filter applications/ }).click();
-  await page.getByRole('option', { name: 'Needs attention', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Filter applications' }).selectOption('attention');
   await expect(page.getByRole('button', { name: 'p07', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'k8s-modules', exact: true })).toHaveCount(0);
 });
@@ -359,8 +358,7 @@ test('repository-only GitHub failures remain visible and need attention', async 
   expect(snapshot.apps[0].errors.some((error) => error.startsWith('GitHub:'))).toBe(true);
   expect(app.requests.kubernetes).toEqual([]);
   await page.goto(app.url);
-  await page.getByRole('button', { name: /Filter applications/ }).click();
-  await page.getByRole('option', { name: 'Needs attention', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Filter applications' }).selectOption('attention');
   await expect(page.getByRole('button', { name: 'p07', exact: true })).toBeVisible();
 });
 const archive = (...logs: string[]) =>
@@ -421,7 +419,7 @@ function dependencyHandler(
   };
 }
 
-test('real collectors preserve rollout readiness, versions, partial failures, API headers and React details', async ({
+test('real collectors preserve rollout readiness, versions, partial failures, API headers and dashboard details', async ({
   observatory,
   page,
   request,
