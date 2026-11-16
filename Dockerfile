@@ -1,4 +1,4 @@
-FROM docker.io/library/golang:1.27.3-bookworm AS backend
+FROM docker.io/library/golang:1.27.4-bookworm AS backend
 WORKDIR /src
 COPY go.mod ./
 COPY *.go ./
