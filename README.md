@@ -159,8 +159,9 @@ including unchanged ones. Releases target the build commit. The server package
 must be public for anonymous pulls. Publication/rollout are serialized.
 `Update dependencies` uses Go/Node and Renovate to propose grouped updates weekly.
 
-When `DEPLOY_ENABLED=true`, Azure OIDC, kubelogin and Twingate deploy the tested
-artifact and image. Terraform supplies `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`,
+After both publication jobs succeed on `main`, Azure OIDC, kubelogin and Twingate
+deploy the tested artifact and image. Pull requests never deploy; manual runs
+deploy only when targeting `main`. Terraform supplies `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`,
 `AZURE_SUBSCRIPTION_ID`, `AZURE_KEYVAULT_NAME`, `TWINGATE_SERVICE_KEY`. The scoped
 application vault supplies `k8s-config`, `hostname`, `api-client-id`,
 `forward-auth-config`, and `client-storage-config`. The platform runtime Secret
