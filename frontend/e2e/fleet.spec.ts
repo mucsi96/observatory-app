@@ -281,6 +281,22 @@ test('each PR has its own accessible linked status icon without counts', async (
     const link = row.getByRole('link', { name: description, exact: true });
     await expect(link).toHaveAttribute('href', `https://github.com/owner/hello/pull/${index + 1}`);
     await expect(link.getByRole('img')).toHaveAttribute('title', description);
+    const icon = link.getByRole('img');
+    const svg = icon.locator('svg');
+    await expect(svg).toBeVisible();
+    await expect(svg).toHaveAttribute('aria-hidden', 'true');
+    // A font glyph inside a separate CSS circle previously slipped below its center.
+    await expect(icon).toHaveText('');
+    await expect(icon).toHaveCSS('border-top-width', '0px');
+    await expect(icon).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    const bounds = await svg.boundingBox();
+    const target = await link.boundingBox();
+    expect(bounds?.width).toBe(20);
+    expect(bounds?.height).toBe(20);
+    expect(target!.width).toBeGreaterThanOrEqual(28);
+    expect(target!.height).toBeGreaterThanOrEqual(28);
+    expect(bounds!.x + bounds!.width / 2).toBeCloseTo(target!.x + target!.width / 2);
+    expect(bounds!.y + bounds!.height / 2).toBeCloseTo(target!.y + target!.height / 2);
     await link.focus();
     await expect(link).toBeFocused();
   }

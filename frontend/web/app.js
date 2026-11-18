@@ -123,15 +123,20 @@ function details(app) {
 }
 
 function prStatus(pr) {
-  const [label, glyph] = {
-    passed: ['Checks passed', '✓'],
-    failed: ['Checks failed', '×'],
-    running: ['Checks running', '◌'],
-    'no checks': ['No checks', '−'],
-    unknown: ['Checks unknown', '?'],
+  // Keep the outline and symbol in one coordinate system, independent of font metrics.
+  const circle = '<circle cx="12" cy="12" r="10" />';
+  const [label, shape] = {
+    passed: ['Checks passed', `${circle}<path d="m8 12 3 3 5-6" />`],
+    failed: ['Checks failed', `${circle}<path d="m9 9 6 6m0-6-6 6" />`],
+    running: ['Checks running', '<path d="M12 2a10 10 0 1 1-7.07 2.93" />'],
+    'no checks': ['No checks', `${circle}<path d="M8 12h8" />`],
+    unknown: [
+      'Checks unknown',
+      `${circle}<path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3m.08 4h.01" />`,
+    ],
   }[pr.pipeline];
   const description = `#${pr.number} ${pr.title}${pr.draft ? ' (draft)' : ''}: ${label}`;
-  const icon = `<span role="img" aria-label="${escapeHTML(description)}" title="${escapeHTML(description)}" class="pr-icon ${tone(pr.pipeline)}">${glyph}</span>`;
+  const icon = `<span role="img" aria-label="${escapeHTML(description)}" title="${escapeHTML(description)}" class="pr-icon ${tone(pr.pipeline)}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${shape}</svg></span>`;
   return safeURL(pr.url)
     ? `<a href="${escapeHTML(pr.url)}" target="_blank" rel="noopener noreferrer">${icon}</a>`
     : icon;
