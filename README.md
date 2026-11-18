@@ -159,7 +159,44 @@ including unchanged ones. Releases target the build commit. The server package
 must be public for anonymous pulls. Publication/rollout are serialized.
 `Update dependencies` uses Go/Node and Renovate to propose grouped updates weekly.
 
-When `DEPLOY_ENABLED=true`, Azure OIDC, kubelogin and Twingate deploy the tested
+### Deployment switch (`DEPLOY_ENABLED`)
+
+`DEPLOY_ENABLED` is a GitHub Actions configuration variable read by the
+[`deploy` job](.github/workflows/pipeline.yml), not an application environment
+variable or secret. Its purpose is to pause production rollout while keeping
+validation and release publication available, for example during infrastructure
+maintenance or while configuring a new repository's deployment credentials.
+
+| Value | Pipeline behavior |
+| --- | --- |
+| `true` (case-insensitive comparison) | Enables deployment on `main` after both publication jobs succeed |
+| Any other value or unset | Skips the entire deployment job |
+
+Pull requests never deploy. A manual `Pipeline` run must also target `main` to
+deploy; it does not bypass this switch. Tests still run with deployment disabled,
+and successful main-branch runs can still publish changed server/client releases.
+Skipping deployment leaves the running application and hosted assets in place;
+it does not stop the application or roll it back. The skipped job includes Azure
+login, static asset replacement, and the Kubernetes rollout.
+
+Manage the repository variable under **Settings → Secrets and variables →
+Actions → Variables**, or with GitHub CLI:
+
+```bash
+gh variable list --repo mucsi96/observatory-app
+gh variable set DEPLOY_ENABLED --body false --repo mucsi96/observatory-app
+# Re-enable rollout when ready:
+gh variable set DEPLOY_ENABLED --body true --repo mucsi96/observatory-app
+```
+
+Changing the variable does not itself start a workflow or cancel an already
+running deployment. After enabling it, push to `main` or manually run `Pipeline`
+on `main` to deploy. It is an operational switch, not an authorization boundary:
+deployment still requires the configured credentials and infrastructure access.
+
+### Deployment infrastructure
+
+When deployment is enabled, Azure OIDC, kubelogin and Twingate deploy the tested
 artifact and image. Terraform supplies `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`,
 `AZURE_SUBSCRIPTION_ID`, `AZURE_KEYVAULT_NAME`, `TWINGATE_SERVICE_KEY`. The scoped
 application vault supplies `k8s-config`, `hostname`, `api-client-id`,
