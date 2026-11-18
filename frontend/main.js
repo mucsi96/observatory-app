@@ -3,6 +3,7 @@ import { snapshotSchema } from './src/features/fleet/schema';
 import './web/style.css';
 import './web/dark.css';
 import './web/backports.css';
+import './web/react-layout.css';
 
 initializeFaro({
   url: new URL('/_telemetry/collect', window.location.origin).href,
