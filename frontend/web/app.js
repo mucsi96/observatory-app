@@ -204,7 +204,7 @@ async function refresh(manual = false) {
   if (busy) return;
   busy = true;
   if (manual) {
-    $('refresh').textContent = 'Refreshing…';
+    $('refresh-label').textContent = 'Refreshing…';
     $('refresh').setAttribute('aria-label', 'Refreshing…');
   }
   $('refresh').disabled = true;
@@ -243,7 +243,7 @@ async function refresh(manual = false) {
         '<tr><td colspan="8" class="empty">Waiting for live data. Use Refresh to try again.</td></tr>';
   } finally {
     busy = false;
-    $('refresh').textContent = 'Refresh';
+    $('refresh-label').textContent = 'Refresh';
     $('refresh').setAttribute('aria-label', 'Refresh');
     $('refresh').disabled = false;
   }

@@ -3,16 +3,29 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#10131b" />
+    <meta name="theme-color" content="#111827" />
     <title>Observatory · P07</title>
     <script type="module" src="/main.js"></script>
   </head>
   <body>
     <header class="topbar">
-      <a class="brand" href="/" aria-label="Observatory home"
-        ><span class="brand-mark">◈</span> observatory<span class="brand-divider">/</span
-        ><span id="environment">p07</span></a
-      ><span class="environment"><span class="dot"></span> Production</span>
+      <div class="header-content">
+        <a class="brand" href="/" aria-label="Observatory home"
+          ><svg
+            class="brand-mark"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"
+          >
+            <path
+              d="M10.6 2.6a2 2 0 0 1 2.8 0l8 8a2 2 0 0 1 0 2.8l-8 8a2 2 0 0 1-2.8 0l-8-8a2 2 0 0 1 0-2.8z"
+            />
+          </svg>
+          observatory<span class="brand-divider">/</span><span id="environment">p07</span></a
+        ><span class="environment">Production</span>
+      </div>
     </header>
     <main>
       <section class="intro">
@@ -26,7 +39,19 @@
         <div class="sync">
           <span id="updated" role="status">Connecting to your fleet…</span
           ><button id="refresh" type="button" aria-label="Refresh">
-            <span aria-hidden="true">↻</span> <span>Refresh</span>
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <path
+                d="M3 11a9 9 0 0 1 15-6l3 3M21 3v5h-5M21 13a9 9 0 0 1-15 6l-3-3M3 21v-5h5"
+              /></svg
+            ><span id="refresh-label">Refresh</span>
           </button>
         </div>
       </section>
@@ -41,8 +66,8 @@
           ><span id="health-caption">waiting for a signal</span>
         </article>
         <article aria-label="Open MRs / PRs">
-          <span class="metric-label">Open MRs <small>/ PRs</small></span
-          ><strong id="mrs">—</strong><span>changes on the horizon</span>
+          <span class="metric-label">Open MRs / PRs</span><strong id="mrs">—</strong
+          ><span>changes on the horizon</span>
         </article>
         <article aria-label="Open issues">
           <span class="metric-label">Open issues</span><strong id="issues">—</strong
@@ -57,18 +82,20 @@
           </div>
           <div class="controls">
             <label class="search"
-              ><span aria-hidden="true">⌕</span
+              ><span>Find an application</span
               ><input
                 id="search"
                 type="search"
                 placeholder="Find an application…"
                 aria-label="Find an application" /></label
-            ><label class="sr-only" for="filter">Filter applications</label
-            ><select id="filter">
-              <option value="all">All applications</option>
-              <option value="attention">Needs attention</option>
-              <option value="healthy">Healthy</option>
-            </select>
+            ><label class="filter-control"
+              ><span>Filter applications</span
+              ><select id="filter">
+                <option value="all">All applications</option>
+                <option value="attention">Needs attention</option>
+                <option value="healthy">Healthy</option>
+              </select></label
+            >
           </div>
         </div>
         <div class="table-wrap">
@@ -79,7 +106,7 @@
                 <th scope="col">Frontend / Backend</th>
                 <th scope="col">Health</th>
                 <th scope="col">Production version</th>
-                <th scope="col">Last deployment</th>
+                <th scope="col">Deployment</th>
                 <th scope="col">Dependency update</th>
                 <th scope="col">MRs / PRs</th>
                 <th scope="col">Issues</th>
@@ -100,8 +127,21 @@
         </p>
       </section>
       <footer>
-        <span><span class="brand-mark">◈</span> Built for a clearer view.</span
-        ><span>Go + vanilla JavaScript · Polls every minute</span>
+        <span
+          ><svg
+            class="brand-mark"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"
+          >
+            <path
+              d="M10.6 2.6a2 2 0 0 1 2.8 0l8 8a2 2 0 0 1 0 2.8l-8 8a2 2 0 0 1-2.8 0l-8-8a2 2 0 0 1 0-2.8z"
+            />
+          </svg>
+          Built for a clearer view.</span
+        ><span>Go + vanilla JavaScript · Shared live fleet signals</span>
       </footer>
     </main>
   </body>

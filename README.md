@@ -1,7 +1,7 @@
 # Observatory
 
 A production fleet dashboard built with **Go and vanilla JavaScript**, restoring
-the original dark dashboard and backporting the features added since October 11.
+the last React dashboard's layout and retaining the features added since October 11.
 The backend uses the Go standard library without third-party Go dependencies.
 Vite bundles the frontend, Zod validates snapshots, and Faro reports browser
 telemetry. There is no React or Rust runtime or build dependency.
@@ -57,7 +57,9 @@ fixture data for visual review, not production signals or pixel baselines.
   signals, attempt-specific Renovate evidence, and cached technology detection.
 - `kubernetes.go`: workload readiness and projected service-account token reads.
 - `auth.go`, `issues.go`: independent JWT authorization and issue submission.
-- `frontend/web/`: original vanilla dashboard/styles with feature backports.
+- `frontend/web/`: vanilla dashboard with feature backports; `react-layout.css`
+  restores the last React layout without a framework dependency. See the
+  [reference screenshots](docs/screenshots/README.md).
 - `frontend/main.js`: build-time Faro configuration and snapshot validation.
 
 There is no database or persistent application state to migrate. Runtime variables:
