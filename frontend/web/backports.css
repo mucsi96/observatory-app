@@ -4,13 +4,14 @@
   flex-wrap: wrap;
 }
 .pr-icon {
-  display: inline-grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  border: 1.5px solid currentColor;
-  border-radius: 50%;
-  font-size: 18px;
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+.pr-icon svg {
+  display: block;
+  flex-shrink: 0;
 }
 .pr-icon.good {
   color: #7dd3ae;

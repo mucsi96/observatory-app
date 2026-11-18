@@ -29,6 +29,22 @@ The script checks for browser exceptions and document overflow. For expanded
 rows, issue dialogs, filter menus and mobile Safari, use the existing
 `SCREENSHOT_WEBKIT=1 npm --prefix frontend run screenshots` workflow.
 
+## PR status icon follow-up (issue #53)
+
+The remaining icon alignment regression used font glyphs inside CSS circles.
+PR states now use fixed 20px inline SVG outlines, matching the last React
+dashboard's circle-check, circle-X, loader, circle-minus and circle-help treatment.
+Labels, tooltips, keyboard focus and 28px link targets are preserved.
+
+The following crops show all five states in that order (wrapping with the table
+column), using fixture data at 2× scale in the production bundle:
+
+- [Desktop Chromium, 1600px viewport](pr-icons-chromium.png)
+- [Mobile WebKit, 430px viewport](pr-icons-webkit.png)
+
+The browser regression test checks SVG sizing, centered placement, transparent
+backgrounds, accessible labels and link targets for every state.
+
 ## Earlier migration previews
 
 Historical migration screenshots of the React bundle served by the Rust backend, using
