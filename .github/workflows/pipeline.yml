@@ -175,7 +175,7 @@ jobs:
           files: client-static.tar.gz
 
   deploy:
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.DEPLOY_ENABLED == 'true'
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: [publish-server, publish-client]
     runs-on: ubuntu-latest
     timeout-minutes: 20
