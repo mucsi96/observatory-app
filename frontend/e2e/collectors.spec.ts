@@ -18,6 +18,86 @@ const updated =
   '2026-10-19T04:26:37.1874736Z DEBUG: PR updated...prNo: 42 (repository=o/r, branch=renovate/all)\n2026-10-19T04:26:37.1876455Z INFO: PR updated (repository=o/r, branch=renovate/all)\n2026-10-19T04:26:37.1877000Z        "pr": 42,\n';
 const logLimit = 16 * 1024 * 1024;
 
+for (const sameRun of [true, false]) {
+  test(`deployment failure survives a ${sameRun ? 'same-run retry' : 'new delivery run'} until success`, async ({
+    observatory,
+    page,
+  }) => {
+    let status = 'queued';
+    const failure = {
+      id: 10,
+      name: 'deploy',
+      status: 'completed',
+      conclusion: 'failure',
+      html_url: 'https://github.com/o/r/actions/runs/1/job/10',
+      completed_at: '2026-11-21T08:00:00Z',
+    };
+    const run = (id: number, runStatus: string) => ({
+      id,
+      path: '.github/workflows/pipeline.yml',
+      event: 'push',
+      status: runStatus,
+      html_url: `https://github.com/o/r/actions/runs/${id}`,
+      updated_at: '2026-11-21T09:00:00Z',
+    });
+    const app = await observatory({
+      github: (event) => {
+        if (event.path === '/repos/o/r/actions/runs')
+          return {
+            json: {
+              workflow_runs: sameRun ? [run(1, status)] : [run(2, status), run(1, 'completed')],
+            },
+          };
+        if (event.path.endsWith('/jobs')) {
+          expect(event.query.get('filter')).toBe('all');
+          const retry = {
+            id: 20,
+            name: 'deploy',
+            status,
+            conclusion: status === 'completed' ? 'success' : null,
+            html_url: 'https://github.com/o/r/actions/runs/2/job/20',
+          };
+          return {
+            json: {
+              jobs: sameRun
+                ? [retry, failure]
+                : event.path.includes('/runs/2/')
+                  ? [retry]
+                  : [failure],
+            },
+          };
+        }
+        return defaultGitHub(event);
+      },
+    });
+    await page.goto(app.url);
+    const alert = page.getByRole('alert', { name: 'Deployment failures' });
+    await expect(alert).toBeVisible();
+    await expect(alert.getByRole('link', { name: 'View deployment' })).toHaveAttribute(
+      'href',
+      failure.html_url,
+    );
+    for (const next of ['in_progress', 'completed']) {
+      status = next;
+      const refreshed = page.waitForResponse((response) =>
+        response.url().endsWith('/api/apps/refresh'),
+      );
+      await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+      const snapshot = await (await refreshed).json();
+      const repo = snapshot.apps[0].repositoryData;
+      expect(repo.deployment.status).toBe(next === 'completed' ? 'success' : 'failure');
+      if (next === 'completed') {
+        expect(repo.activeDeployment).toBeNull();
+        await expect(alert).toBeHidden();
+      } else {
+        expect(repo.deployment.updatedAt).toBe(failure.completed_at);
+        expect(repo.activeDeployment.status).toBe('in_progress');
+        await expect(alert).toContainText('Another deployment pipeline is in progress');
+      }
+    }
+  });
+}
+
 test('Go server exposes configuration help and rejects invalid runtime settings before serving', () => {
   const binary = fileURLToPath(new URL('../../bin/observatory', import.meta.url));
   const cwd = fileURLToPath(new URL('../../', import.meta.url));

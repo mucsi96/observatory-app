@@ -108,29 +108,37 @@ func (d *Dashboard) repository(ctx context.Context, repo, workflow string) (*Rep
 		if run.Path != ".github/workflows/"+workflow || run.Event == "pull_request" || run.Event == "pull_request_target" {
 			continue
 		}
+		var completed *Run
+		var completedJobID int64
 		for page := 1; ; page++ {
 			var jobs struct {
 				Jobs []struct {
+					ID                       int64
 					Name, Status, Conclusion string
 					HTMLURL                  string `json:"html_url"`
+					CompletedAt              string `json:"completed_at"`
 				}
 			}
-			if err := getJSON(ctx, d.github, fmt.Sprintf("%s/repos/%s/actions/runs/%d/jobs?per_page=100&page=%d", d.githubURL, repo, run.ID, page), d.githubToken, &jobs); err != nil {
+			if err := getJSON(ctx, d.github, fmt.Sprintf("%s/repos/%s/actions/runs/%d/jobs?filter=all&per_page=100&page=%d", d.githubURL, repo, run.ID, page), d.githubToken, &jobs); err != nil {
 				return nil, err
 			}
 			for _, job := range jobs.Jobs {
-				if job.Name == "deploy" || job.Name == "Deploy" {
-					status := job.Status
-					if status == "completed" {
-						status = job.Conclusion
+				if (job.Name == "deploy" || job.Name == "Deploy") && job.Status == "completed" && job.Conclusion != "skipped" && (completed == nil || job.ID > completedJobID) {
+					updatedAt := job.CompletedAt
+					if updatedAt == "" {
+						updatedAt = run.UpdatedAt
 					}
-					result.Deployment = &Run{Status: status, URL: job.HTMLURL, UpdatedAt: run.UpdatedAt}
-					return result, nil
+					completed = &Run{Status: job.Conclusion, URL: job.HTMLURL, UpdatedAt: updatedAt}
+					completedJobID = job.ID
 				}
 			}
 			if len(jobs.Jobs) < 100 {
 				break
 			}
+		}
+		if completed != nil {
+			result.Deployment = completed
+			return result, nil
 		}
 	}
 	return result, nil
