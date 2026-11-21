@@ -107,6 +107,10 @@ for either or both components.
   delivery runs, with paginated jobs. Active delivery pipelines are shown before
   the deploy job exists, independently of the latest deploy result. PR and
   unrelated workflows are excluded.
+  Failed deployment attempts also appear in a prominent red alert above the fleet
+  overview, with application names and direct job links, even when workloads are
+  healthy or the application is hidden by search/filter. A newer successful
+  deployment clears the alert; an active pipeline does not hide the last failure.
 - **MRs / PRs:** paginated open PRs, drafts and individually linked accessible
   status icons. Checks and legacy statuses are combined; failure wins over running.
   Missing checks and unknown checks are distinct from success. A denied Checks API

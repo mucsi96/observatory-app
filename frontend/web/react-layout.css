@@ -384,6 +384,37 @@ footer .brand-mark {
   box-shadow: none;
   animation: deployment-pulse 2.4s ease-in-out infinite;
 }
+.deployment-alerts {
+  margin: 0 0 24px;
+  padding: 20px 24px;
+  border: 2px solid #f87171;
+  border-left-width: 6px;
+  border-radius: 12px;
+  background: #3b1820;
+  color: #ffe4e6;
+  overflow-wrap: anywhere;
+}
+.deployment-alerts h2 {
+  margin: 0 0 8px;
+  font-size: 20px;
+}
+.deployment-alerts p {
+  margin: 0 0 16px;
+}
+.deployment-alerts ul {
+  margin: 0;
+  padding-left: 20px;
+}
+.deployment-alerts li + li {
+  margin-top: 12px;
+}
+.deployment-alerts a {
+  color: #ffe4e6;
+  text-decoration: underline;
+}
+.deployment-alerts .sub {
+  color: #fecdd3;
+}
 @keyframes deployment-pulse {
   0%,
   100% {

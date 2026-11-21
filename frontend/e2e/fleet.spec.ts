@@ -1,6 +1,43 @@
 import { expect, test } from '@playwright/test';
 import { fleetSnapshot } from './fixtures/fleet';
 
+for (const width of [1280, 390]) {
+  test(`failed deployments remain prominent despite healthy workloads and filters at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const snapshot = fleetSnapshot();
+    const repo = snapshot.apps[0].repositoryData!;
+    repo.deployment!.status = 'failure';
+    repo.mrs = [];
+    repo.openMRs = 0;
+    repo.dependencyUpdate = null;
+    await page.route(/\/api\/apps(?:\/refresh)?$/, (route) => route.fulfill({ json: snapshot }));
+    await page.goto('/');
+    const alert = page.getByRole('alert', { name: 'Deployment failures' });
+    await expect(alert).toBeInViewport();
+    await expect(alert).toContainText('Deployment needs attention · 1');
+    await expect(alert).toContainText('Hello');
+    await expect(alert).toContainText('Healthy workloads do not mean the latest changes are live.');
+    await expect(alert.getByRole('link', { name: 'View deployment' })).toHaveAttribute(
+      'href',
+      repo.deployment!.url,
+    );
+    await page.getByRole('combobox', { name: 'Filter applications' }).selectOption('attention');
+    await expect(page.getByRole('button', { name: 'Hello', exact: true })).toBeVisible();
+    await page.getByRole('searchbox', { name: 'Find an application' }).fill('Language');
+    await expect(page.getByRole('button', { name: 'Hello', exact: true })).toHaveCount(0);
+    await expect(alert).toBeVisible();
+    repo.activeDeployment = { ...repo.deployment!, status: 'in_progress' };
+    await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+    await expect(alert).toContainText('Another deployment pipeline is in progress');
+    repo.activeDeployment = null;
+    repo.deployment!.status = 'success';
+    await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+    await expect(alert).toBeHidden();
+  });
+}
+
 test('pending issue creation prevents duplicate submits and dismissal, then resets on reopen', async ({
   page,
 }) => {

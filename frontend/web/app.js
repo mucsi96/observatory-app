@@ -145,6 +145,20 @@ function prStatus(pr) {
 function render() {
   if (!snapshot) return;
   const apps = snapshot.apps;
+  const failedDeployments = apps.filter((app) =>
+    failures.has(app.repositoryData?.deployment?.status),
+  );
+  const deploymentAlerts = $('deployment-alerts');
+  const alertContent = failedDeployments.length
+    ? `<h2>Deployment needs attention · ${failedDeployments.length}</h2><p>Latest deployment attempts did not succeed. Healthy workloads do not mean the latest changes are live.</p><ul>${failedDeployments
+        .map((app) => {
+          const deployment = app.repositoryData.deployment;
+          return `<li><strong>${escapeHTML(app.name)}</strong> ${badge(deployment.status)} ${link(deployment.url, 'View deployment ↗')}<span class="sub">${escapeHTML(age(deployment.updatedAt))}${app.repositoryData.activeDeployment ? ' · Another deployment pipeline is in progress' : ''}</span></li>`;
+        })
+        .join('')}</ul>`
+    : '';
+  deploymentAlerts.hidden = !failedDeployments.length;
+  if (deploymentAlerts.innerHTML !== alertContent) deploymentAlerts.innerHTML = alertContent;
   $('environment').textContent = snapshot.environment;
   $('total').textContent = apps.length;
   const deployed = apps.filter((app) => app.namespace);
